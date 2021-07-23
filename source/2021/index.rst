@@ -3,7 +3,7 @@
 2021 日志
 
 .. toctree::
-    :maxdepth: 2
+    :maxdepth: 1
 
-    01/content
-    02/content
+    sphinx
+    jwt
