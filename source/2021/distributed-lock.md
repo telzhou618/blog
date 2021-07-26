@@ -10,7 +10,7 @@
 
 ## Redis实现分布式锁
 
-Redisson分布式锁实现,新建spring-boot项目，导入redisson包
+- 需要用到redisson包,新建spring-boot项目，导入redisson包
 ```xml
  <dependency>
     <groupId>org.redisson</groupId>
@@ -19,7 +19,7 @@ Redisson分布式锁实现,新建spring-boot项目，导入redisson包
 </dependency>
 ```
 
-配置Redis连接信息
+- 配置Redis连接信息
 ```yaml
 spring:
   redis:
@@ -28,7 +28,7 @@ spring:
     port: 6379
 ```
 
-锁的具体使用代码
+- 锁的具体使用代码
 ```java
 @RestController
 @AllArgsConstructor
@@ -68,12 +68,14 @@ public class DistributedLockRedissonController {
     }
 }
 ```
-Redis分布式锁的实现原理实现原理
+- 实现原理
+
+待完善
 
 
 ## Zookeeper实现分布式锁
 
-新建spring-boot导入导入curator包
+- 需要用到curator包，新建spring-boot项目，导入curator包
 ```xml
 <dependency>
     <groupId>org.apache.curator</groupId>
@@ -83,14 +85,14 @@ Redis分布式锁的实现原理实现原理
 ```
     
 
-配置zookeeper连接信息
+- 配置zookeeper连接信息
 ```yaml
 spring:
       zookeeper:
         address: 127.0.0.1:2181
 ```
 
-配置CuratorFramework客户端::
+- 注册CuratorFramework客户端
 ```java
 @Configuration
 public class CommonConfig {
@@ -109,7 +111,7 @@ public class CommonConfig {
 ```
 
 
-zookeeper分布式锁使用::
+- zookeeper分布式锁使用
 ```java
 @RestController
 @AllArgsConstructor
@@ -150,6 +152,8 @@ public class DistributedLockZookeeperController {
 
 }
 ```
-实现原理
+- 实现原理
+
+待完善
 
 ## 总结
