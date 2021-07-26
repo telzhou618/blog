@@ -6,3 +6,4 @@
     sphinx
     jwt
     distributed-lock
+    mysql-review
