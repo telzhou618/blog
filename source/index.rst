@@ -9,4 +9,5 @@
    :maxdepth: 2
 
    2021/index
+   others/index
 

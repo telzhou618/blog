@@ -1,6 +1,6 @@
-2021文档
+其他
 ==================
 .. toctree::
     :maxdepth: 1
 
-    mysql-review
+    sphinx
