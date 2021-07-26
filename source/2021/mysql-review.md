@@ -73,9 +73,9 @@ where name = 'Lucy';
 const或system：primary key 或 unique key 的所有列与常数比较，只匹配一行，速度很快。 eq_ref：primary key 或 unique key 索引的所有部分被连接使用，只返回一行。
 ref：普通索引或唯一索引前缀匹配，可能找到多行。 range：范围查找，如：in、between、> 、<、>= 等。 index：扫描二级索引的全部叶节点，一般为覆盖索引。 ALL：扫描主键索引的叶节点，指全表扫描。
 
-- possible_keys 代表MySQL
-
-可能选择哪些索引来查找。 当possible_keys有值，key 为NULL时，代表数据不多，走索引还要回表，MySQL 认为直接走全表扫描可能会快一点； 当possible_keys为NULL时，代表没有索引可用，直接全表扫描。
+- possible_keys 
+  
+代表MySQL可能选择哪些索引来查找。 当possible_keys有值，key 为NULL时，代表数据不多，走索引还要回表，MySQL 认为直接走全表扫描可能会快一点； 当possible_keys为NULL时，代表没有索引可用，直接全表扫描。
 
 - key
 
