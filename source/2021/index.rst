@@ -5,3 +5,5 @@
 
     mysql-review
     distributed-lock
+    redis
+    spring-aop
