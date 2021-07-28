@@ -99,7 +99,7 @@ aof策略配置
 
 ## Redis主从模式
 
-<img src="/_static/images/image-20210728155319971.png" alt="image-20210728155319971" style="zoom:50%;" />
+![image-20210728183045747](https://raw.githubusercontent.com/telzhou618/images/main/img/image-20210728183045747.png)
 
 ### 主从模式配置
 
@@ -139,11 +139,152 @@ master收到PSYNC命令后，会在后台进行数据持久化通过bgsave生成
 
 ## Redis 哨兵模式
 
+sentinel哨兵是特殊的redis服务，不提供读写服务，主要用来监控redis实例节点。 哨兵架构下client端第一次从哨兵找出redis的主节点，后续就直接访问redis的主节点，不会每次都通过 sentinel代理访问redis的主节点，当redis的主节点发生变化，哨兵会第一时间感知到，并且将新的redis 主节点通知给client端(这里面redis的client端一般都实现了订阅功能，订阅sentinel发布的节点变动消息)
+
+![image-20210728183140654](https://raw.githubusercontent.com/telzhou618/images/main/img/image-20210728183140654.png)
+
+### **redis哨兵架构搭建步骤**
+
+```
+1、复制一份sentinel.conf文件
+cp sentinel.conf sentinel-26379.conf
+
+2、将相关配置修改为如下值：
+port 26379
+daemonize yes
+pidfile "/var/run/redis-sentinel-26379.pid"
+logfile "26379.log"
+dir "/usr/local/redis-5.0.3/data"
+# sentinel monitor <master-redis-name> <master-redis-ip> <master-redis-port> <quorum>
+# quorum是一个数字，指明当有多少个sentinel认为一个master失效时(值一般为：sentinel总数/2 + 1)，master才算真正失效
+sentinel monitor mymaster 192.168.0.60 6379 2   # mymaster这个名字随便取，客户端访问时会用到
+
+3、启动sentinel哨兵实例
+src/redis-sentinel sentinel-26379.conf
+
+4、查看sentinel的info信息
+src/redis-cli -p 26379
+127.0.0.1:26379>info
+可以看到Sentinel的info里已经识别出了redis的主从
+
+5、可以自己再配置两个sentinel，端口26380和26381，注意上述配置文件里的对应数字都要修改
+```
+
+### 连接哨兵模式
+
+#### jedis 连接哨兵：
+
+```java
+public class JedisSentinelTest {
+    public static void main(String[] args) throws IOException {
+
+        JedisPoolConfig config = new JedisPoolConfig();
+        config.setMaxTotal(20);
+        config.setMaxIdle(10);
+        config.setMinIdle(5);
+
+        String masterName = "mymaster";
+        Set<String> sentinels = new HashSet<String>();
+        sentinels.add(new HostAndPort("192.168.0.60",26379).toString());
+        sentinels.add(new HostAndPort("192.168.0.60",26380).toString());
+        sentinels.add(new HostAndPort("192.168.0.60",26381).toString());
+        //JedisSentinelPool其实本质跟JedisPool类似，都是与redis主节点建立的连接池
+        //JedisSentinelPool并不是说与sentinel建立的连接池，而是通过sentinel发现redis主节点并与其建立连接
+        JedisSentinelPool jedisSentinelPool = new JedisSentinelPool(masterName, sentinels, config, 3000, null);
+        Jedis jedis = null;
+        try {
+            jedis = jedisSentinelPool.getResource();
+            System.out.println(jedis.set("sentinel", "zhuge"));
+            System.out.println(jedis.get("sentinel"));
+        } catch (Exception e) {
+            e.printStackTrace();
+        } finally {
+            //注意这里不是关闭连接，在JedisPool模式下，Jedis会被归还给资源池。
+            if (jedis != null)
+                jedis.close();
+        }
+    }
+}
+```
+
+#### spring-boot 连接哨兵
+
+- 引入依赖的jar包
+
+```xml
+<dependency>
+   <groupId>org.springframework.boot</groupId>
+   <artifactId>spring-boot-starter-data-redis</artifactId>
+</dependency>
+
+<dependency>
+   <groupId>org.apache.commons</groupId>
+   <artifactId>commons-pool2</artifactId>
+</dependency>
+```
+
+- 配置连接信息
+
+```yaml
+server:
+  port: 8080
+
+spring:
+  redis:
+    database: 0
+    timeout: 3000
+    sentinel:    #哨兵模式
+      master: mymaster #主服务器所在集群名称
+     nodes: 192.168.0.60:26379,192.168.0.60:26380,192.168.0.60:26381
+   lettuce:
+      pool:
+        max-idle: 50
+        min-idle: 10
+        max-active: 100
+        max-wait: 1000
+```
+
+- 使用代码
+
+```java
+@RestController
+public class IndexController {
+
+    private static final Logger logger = LoggerFactory.getLogger(IndexController.class);
+
+    @Autowired
+    private StringRedisTemplate stringRedisTemplate;
+
+    /**
+     * 测试节点挂了哨兵重新选举新的master节点，客户端是否能动态感知到
+     * 新的master选举出来后，哨兵会把消息发布出去，客户端实际上是实现了一个消息监听机制，
+     * 当哨兵把新master的消息发布出去，客户端会立马感知到新master的信息，从而动态切换访问的masterip
+     *
+     * @throws InterruptedException
+     */
+    @RequestMapping("/test_sentinel")
+    public void testSentinel() throws InterruptedException {
+        int i = 1;
+        while (true){
+            try {
+                stringRedisTemplate.opsForValue().set("zhuge"+i, i+"");
+                System.out.println("设置key："+ "zhuge" + i);
+                i++;
+                Thread.sleep(1000);
+            }catch (Exception e){
+                logger.error("错误：", e);
+            }
+        }
+    }
+}
+```
+
 ## Redis 集群模式
+
+![image-20210728183234826](https://raw.githubusercontent.com/telzhou618/images/main/img/image-20210728183234826.png)
 
 ## Redis 核心原理
 
 ## Redis 常见问题及解决
 
 ## Redis 参考
-
