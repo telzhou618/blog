@@ -127,6 +127,9 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+
+/.idea/
+
 /.idea/.gitignore
 /.idea/blog.iml
 /.idea/misc.xml
