@@ -77,7 +77,7 @@ quit
 
 还可以手动执行命令生成RDB快照，进入redis客户端执行命令**save**或**bgsave**可以生成dump.rdb文件， 每次命令执行都会将所有redis内存快照到一个新的rdb文件里，并覆盖原有rdb快照文件。
 
-### 持久化之 aof模式
+### 持久化之aof模式
 
 开启aof模式
 
