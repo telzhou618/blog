@@ -464,10 +464,6 @@ public class JedisClusterTest {
         }
     }
 }
-
-运行效果如下：
-OK
-zhuge
 ```
 
 ### Spring-boot 操作Redis集群
