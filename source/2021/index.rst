@@ -7,3 +7,4 @@
     distributed-lock
     redis
     spring-aop
+    commons-pool2
