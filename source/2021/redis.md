@@ -71,7 +71,7 @@ quit
 
 开启rdb模式
 
-```she
+```shell
 # save 60 1000 //关闭RDB只需要将所有的save保存策略注释掉即可
 ```
 

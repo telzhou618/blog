@@ -101,6 +101,7 @@ datetime：8字节 如果字段允许为 NULL，需要1字节记录是否为 NUL
 
 - Extra 
   
+
 代表额外的信息,取值如下:
 
     - Using index：使用覆盖索引。
@@ -133,17 +134,17 @@ CREATE TABLE `employees`
 - 不在索引上做任何操作，如：计算、函数、类型转换等，会导致索引失效。
 ```sql
 EXPLAIN SELECT * FROM employees WHERE left (name, 3) = 'LiLei';
-```  
+```
 
 - 存储引擎不能使用索引范围条件右边的列。如下只有 nage 和 age 字段参与索引查找。可通过 key_len 长度确定索引真实用到的字段。
 ```sql
 EXPLAIN SELECT * FROM employees WHERE name = 'LiLei' AND age > 22 AND position = 'manager';
-```  
+```
 
 - 尽量用覆盖索引，减少SLECT * 语句。
 ```sql
 EXPLAIN SELECT name, age FROM employees WHERE name = 'LiLei' AND age = 23 AND position = 'manager';
-```  
+```
 
 - 不等于(!=或者<>)、not in、not exists 都不走索引。
 ```sql
@@ -173,7 +174,7 @@ EXPLAIN SELECT * FROM employees WHERE name = 1000;
 - 少用 or 或 in, 查询时不一定走索引，优化器评估确定是否走索引。
 ```sql
 EXPLAIN SELECT * FROM employees WHERE name = 'LiLei' or name = 'HanMeimei';
-```  
+```
 
 - 强制走索引
 ```sql
@@ -185,7 +186,7 @@ WHERE name > 'LiLei' AND age = 22 A ND position ='manager';
 - 索引下推
 ```sql
 EXPLAIN SELECT * FROM employees WHERE name like 'LiLei%' AND age = 22 AND position = 'manager';
-```  
+```
 
 在MySQL5.6之前的版本，这个查询只能在联合索引里匹配到名字是'LiLei'开头的索引，然后拿这些索引对应的主键逐个回表，到主键索引上找出相应的记录，再比对age和position这两个字段的值是否符合。
 
@@ -352,6 +353,7 @@ Extra 中出现 Using fileSort, 使用name索引字段，position排序，中间
  1) order by语句使用索引最左前列。
  2) 使用where子句与order by子句条件列组合满足索引最左前列。
     
+
 3、尽量在索引列上完成排序，遵循索引建立（索引创建的顺序）时的最左前缀法则。
 
 4、如果order by的条件不在索引列上，就会产生Using filesort。
@@ -408,7 +410,7 @@ id > 90000 limit 5;
 
 ```sql
 EXPLAIN select * from employees ORDER BY name limit 90000,5;
-```  
+```
 
 即使 name 字段有索引，MySQL 也不会走索引，原因：走 idx_name_age_position 索引，还要回表，要扫描多棵树，MySQL 认为性能不高，还不如全部扫描呢，所以还用了 filesort 排序。
 
@@ -451,7 +453,7 @@ create table t2 like t1;
 
 ```sql
 EXPLAIN select * from t1 inner join t2 on t1.a = t2.a;
-```  
+```
 ![](/_static/mysql/m5.png)
 
 执行计划原理图

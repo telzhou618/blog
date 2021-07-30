@@ -1,4 +1,4 @@
-# Commons-pool2应用场景实战
+# 5.Commons-pool2应用场景实战
 
 把创建耗时的对象提前创建好，放在池中管理，需要时直接取，用完归还，可以做对象复用，避免用时创建慢且提高系统的效率。
 比如数据库连接、网络连接、大对象创建等都可以池化处理。
@@ -232,4 +232,4 @@ public class JedisPool extends Pool<Jedis> {
 
 最终调用GenericObjectPool作为对象池管理jedis对象，传入JedisFactory工厂和默认的配置对象GenericObjectPoolConfig，配置类可以使用redis自定义的JedisPoolConfig对象。
 
-Jedis客户端通过依赖commons-pool2实现连接池，是的Jedis本身只关注自身和Redis服务的交互上，不需要关系连接怎么创建、消耗等。
+Jedis客户端通过依赖commons-pool2实现连接池，使得Jedis本身只关注自身和Redis服务的交互上，不需要关系连接怎么创建、销毁等。

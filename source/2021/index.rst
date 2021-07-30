@@ -8,3 +8,4 @@
     redis
     spring-aop
     commons-pool2
+    mybatis
