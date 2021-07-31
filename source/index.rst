@@ -10,4 +10,3 @@
 
    2021/index
    others/index
-

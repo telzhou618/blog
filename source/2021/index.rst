@@ -1,7 +1,7 @@
-2021文档
+JAVA架构文档(6)
 ==================
 .. toctree::
-    :maxdepth: 1
+    :maxdepth: 2
 
     mysql-review
     distributed-lock
