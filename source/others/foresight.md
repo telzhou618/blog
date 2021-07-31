@@ -1,4 +1,6 @@
-# 2.规划职业生涯的3大阶段
+# 2.规划职业生涯的三大阶段
+
+<img src="https://raw.githubusercontent.com/telzhou618/images/main/img/image-20210731113420496.png" alt="image-20210731113420496" style="zoom:50%;" />
 
 每个人的一生职业生涯可以分为三个阶段。职业生涯不仅仅指工作，而是伴随着一个人的一生，分为前15年，中间15年，后15年三大阶段。
 
