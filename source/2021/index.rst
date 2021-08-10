@@ -1,7 +1,7 @@
-JAVA架构文档(6)
+JAVA架构文档
 ==================
 .. toctree::
-    :maxdepth: 2
+    :maxdepth: 1
 
     commons-pool2
     redis
@@ -9,3 +9,4 @@ JAVA架构文档(6)
     mysql-review
     spring-aop
     mybatis
+    docker
