@@ -202,7 +202,7 @@ docker-compose -f docker-compose-redis.yml up -d --build // 每次重新打包�
 - -f 指定compose 文件，默认查找docker-compose.yml.
 - -d 后台启动。
 
-### 任务编排常用命令
+### 配置文件常用参数
 
 - image 指定镜像名称或ID
 
@@ -275,4 +275,44 @@ dns: 8.8.8.8
 dns:
 	- 8.8.8.8
 	- 9.9.9.9
+```
+
+### docker-compose 常用操作命令
+
+- 查看容器
+
+```bash
+docker-compose -f docker-compose.yml ps
+```
+
+- 关闭/启动/重启某个容器
+
+```bash
+docker-compose -f docker-compose.yml stop/start/restart <服务名称> // 不加服务名则会操作所有容器
+```
+
+- 查看容器日志
+
+```bash
+docker-compose -f docker-compose.yml logs -f 						 	// 查看所有容器日志
+docker-compose -f docker-compose.yml logs -f	<服务名> 		// 查看指定容器日志
+docker-compose -f docker-compose.yml logs -f >> app.log & // 把日志输出到文件
+```
+
+- 重新构建镜像并启动
+
+```bash
+docker-compose -f docker-compose.yml up --build -d
+```
+
+- 重新构建 cokder-compose.yml 有变化的容器并启动
+
+```bash
+docker-compose -f docker-compose.yml up --fore-recreate -d
+```
+
+- 停掉容器并删除
+
+```bash
+docker-compose -f docker-compose.yml down
 ```
