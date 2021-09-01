@@ -1,4 +1,4 @@
-# 8.Liunx 常用命令
+# Liunx 常用命令
 
 ## less
 

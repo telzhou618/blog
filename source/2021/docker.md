@@ -1,4 +1,4 @@
-# 7.Docker & Docker-compose
+# Docker & Docker-compose
 
 ##  Docker 架构
 

@@ -1,4 +1,4 @@
-# 6.MyBatis 源码解析
+# MyBatis 源码解析
 
 一款轻量级的ORM框架。
 
