@@ -136,7 +136,9 @@ public class ApplicationMain {
 
 > 从执行结果看，后面的代码抛异常后，事务回滚了，那个仅凭一个简单的注解事务是如何开启、提交已经回滚的呢，下面我们从底层源码一探究竟。
 
-## 事务的入口 @EnableTransactionManagement
+## 从事务的入口 开始
+
+@EnableTransactionManagement
 
 点开 @EnableTransactionManagement 注解，我们发现他导入了另一类@Import(TransactionManagementConfigurationSelector.class)，@Import
 的作用是它可以导入一个普通类到Spring容器中，使其注册为一个bean。
@@ -256,6 +258,6 @@ AOP 在哪里找到 BeanFactoryTransactionAttributeSourceAdvisor ?
 
 ![image.png](/_static/aop/img5.png)
 
-## 何时调用
+## 何时调用事务方法
 
 未完
