@@ -449,3 +449,7 @@ public class DefaultResultSetHandler implements ResultSetHandler {
 
 }
 ```
+
+## 完整流程图
+
+![](https://raw.githubusercontent.com/telzhou618/images/main/img/MyBatis%E6%BA%90%E7%A0%81%E6%89%A7%E8%A1%8C%E6%B5%81%E7%A8%8B%20(1).png)
