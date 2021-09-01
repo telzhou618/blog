@@ -90,7 +90,7 @@ for (Integer x : integerList) {
 
 ## 多线程调试
 
-实例：
+实例代码：
 
 ```java
 // 4.多线程调试
