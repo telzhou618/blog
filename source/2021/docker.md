@@ -123,7 +123,7 @@ docker rm -f [容器ID] // 强制删除正在运行的容器
 docker rm ‐f $(docker ps ‐a ‐q) // 强制删除所有容器
 ```
 
-## 构建镜像
+## Docker 构建镜像
 
 ### Dockerfile 命令
 

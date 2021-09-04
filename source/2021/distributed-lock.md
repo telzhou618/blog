@@ -5,7 +5,7 @@
 分布式锁是缺点：造型系统 **吞吐量、可用性** 下降。
 
 
-## Redis实现分布式锁
+## Redis 实现分布式锁
 
 - 需要用到redisson包,新建spring-boot项目，导入redisson包
 ```xml
@@ -70,7 +70,7 @@ public class DistributedLockRedissonController {
 待完善
 
 
-## Zookeeper实现分布式锁
+## ZK 实现分布式锁
 
 - 需要用到curator包，新建spring-boot项目，导入curator包
 ```xml
@@ -153,4 +153,4 @@ public class DistributedLockZookeeperController {
 
 待完善
 
-## 总结
+## 分布式锁总结
