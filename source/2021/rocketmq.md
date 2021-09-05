@@ -1,4 +1,4 @@
-# 大厂如何使用 RocketMQ
+# 一文搞懂 RocketMQ
 
 ## RocketMQ 集群架构图
 
@@ -153,11 +153,34 @@ private String messageDelayLevel = "1s 5s 10s 30s 1m 2m 3m 4m 5m 6m 7m 8m 9m 10m
 
 ### Brocker 存储消息原理
 
+RocketMQ 实现消息持久化存储，主要有如下三种文件组成。
+
 ![rocketmq_design_1](https://raw.githubusercontent.com/telzhou618/images/main/img/rocketmq_design_1.png)
 
 - CommitLog：具体存储消息的载体，提前申请连续存储空间，顺序写入速度快。
 - ConsumeQueue：消费队列，记录Topic和消息存储关系，已经记录消息的当前消费位置（偏移量）。
 - IndexFile：索引文件，可通过KEY或时间区间快速查询消息。
+
+## RocketMQ 源码解析
+
+### NameServer 源码
+
+### Broker 源码
+
+- Broker 启动源码
+- Broker 发消息源码
+- Broker 负责均衡源码
+- Broker 刷盘持久化源码
+
+### Consumer 源码
+
+- Consumer 推模式源码
+
+推模式实时性高，但占用网络资源多。
+
+- Consumer 拉模式源码
+
+拉模式可以批量消费，实时性不高，但能减少网络带宽。
 
 ## RocketMQ 对比其他MQ
 
