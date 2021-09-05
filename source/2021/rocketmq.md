@@ -123,18 +123,44 @@ private String messageDelayLevel = "1s 5s 10s 30s 1m 2m 3m 4m 5m 6m 7m 8m 9m 10m
 
 ### 可靠消息
 
+- 如何保证生产者发消息成功？同步发消息、同步方式同步从节点、同步方式刷盘。
+
+- 如何保证消费者消费成功？不要异步消费，消费成功返回ACK，如果消费失败，MQ会重试。
+
+- MQ 集群宕机怎么办？把消息咱存在Redis，等MQ恢复后再异步再发给MQ。
+
+### 消息过滤
+
+发消息时设置 TAG，消费端可以用TAG过滤只选择自己想要的消息，不想要的不会发给消费者，可以减少网络传输，但增加复杂性。
+
 ### 回溯消息
+
+消费过的消息不会立即删除，如果MQ宕机重启后，消费者可以选择重新消费某一时间前的历史消息重新消费，称为回溯消息。
 
 ### 流量控制
 
+如果 broker 的处理能达到瓶颈，可设置拒绝消息发送，消费者端可通过降低拉取消息的评率流控。
+
 ### 死信队列
+
+对于消费失败的消息，重试次数达到最大值后会迁移到一个特殊的队列，这类消息称为死信，可以在MQ控制台手动重发来进行消费。
 
 ## RocketMQ 核心原理
 
-- 事务消息原理
-- NameServer选主原理
-- Brocker 存储消息原理
+### 事务消息原理
+
+### Brocker 选主原理
+
+### Brocker 存储消息原理
+
+![rocketmq_design_1](https://raw.githubusercontent.com/telzhou618/images/main/img/rocketmq_design_1.png)
+
+- CommitLog：具体存储消息的载体，提前申请连续存储空间，顺序写入速度快。
+- ConsumeQueue：消费队列，记录Topic和消息存储关系，已经记录消息的当前消费位置（偏移量）。
+- IndexFile：索引文件，可通过KEY或时间区间快速查询消息。
 
 ## RocketMQ 对比其他MQ
 
-- RabbitMQ 吞吐量低，Kafka 会丢消息，RocketMQ 几乎全场景都能使用。
+- RabbitMQ 安全性高，可靠性高，但吞吐量低。
+- Kafka 性能高，但功能单一，且可能会丢消息。
+- RocketMQ 性能高，功能全，几乎全场景都能使用。
