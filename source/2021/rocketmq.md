@@ -133,6 +133,11 @@ private String messageDelayLevel = "1s 5s 10s 30s 1m 2m 3m 4m 5m 6m 7m 8m 9m 10m
 
 发消息时设置 TAG，消费端可以用TAG过滤只选择自己想要的消息，不想要的不会发给消费者，可以减少网络传输，但增加复杂性。
 
+```java
+DefaultMQPushConsumer consumer = new DefaultMQPushConsumer("CID_EXAMPLE");
+consumer.subscribe("TOPIC", "TAGA || TAGB || TAGC");
+```
+
 ### 回溯消息
 
 消费过的消息不会立即删除，如果MQ宕机重启后，消费者可以选择重新消费某一时间前的历史消息重新消费，称为回溯消息。
@@ -151,6 +156,12 @@ private String messageDelayLevel = "1s 5s 10s 30s 1m 2m 3m 4m 5m 6m 7m 8m 9m 10m
 
 ### Brocker 选主原理
 
+- Broker 启动后会主动向NameServer注册自己的信息，之后每隔30秒上报一次Topic路由信息。
+
+- 为保证Broker高可用，borker 引入了 dledger 集群部署方式，当主节点宕机后，dledger集群会自动产生一个新的主节点提供服务，dledger 实现了 Raft 协议，支持选主等功能，更多参考：[DLedger - 基于 Raft 算法的 Commitlog Library](https://github.com/openmessaging/dledger/wiki) 。
+
+- 相比kafa引入 zk 实现动态选主的方式dledger 更加轻量，可以直接以 jar 使用。
+
 ### Brocker 存储消息原理
 
 RocketMQ 实现消息持久化存储，主要有如下三种文件组成。
@@ -164,6 +175,205 @@ RocketMQ 实现消息持久化存储，主要有如下三种文件组成。
 ## RocketMQ 源码解析
 
 ### NameServer 源码
+
+- 启动类 NamesrvStartup
+
+```java
+public static void main(String[] args) {
+        main0(args);
+    }
+
+public static NamesrvController main0(String[] args) {
+
+  try {
+    // 实例化 NamesrvController 对象
+    NamesrvController controller = createNamesrvController(args);
+    // 执行启动逻辑
+    start(controller);
+    return controller;
+  } catch (Throwable e) {
+    e.printStackTrace();
+    System.exit(-1);
+  }
+  return null;
+}
+```
+
+> 关键代码就以上两行，createNamesrvController 方法实例化NamesrvController对象，然后执行start方法实现启动逻辑
+
+- createNamesrvController() 方法解析
+
+```java
+    public static NamesrvController createNamesrvController(String[] args) throws IOException, JoranException {
+        System.setProperty(RemotingCommand.REMOTING_VERSION_KEY, Integer.toString(MQVersion.CURRENT_VERSION));
+        //PackageConflictDetect.detectFastjson();
+
+        Options options = ServerUtil.buildCommandlineOptions(new Options());
+        commandLine = ServerUtil.parseCmdLine("mqnamesrv", args, buildCommandlineOptions(options), new PosixParser());
+        if (null == commandLine) {
+            System.exit(-1);
+            return null;
+        }
+				// 实例化 NameServer 配置类
+        final NamesrvConfig namesrvConfig = new NamesrvConfig();
+        // 实例化 Netty 配置类
+        final NettyServerConfig nettyServerConfig = new NettyServerConfig();
+        nettyServerConfig.setListenPort(9876);
+        if (commandLine.hasOption('c')) {
+           // 解析参数C，C参数用来置顶配置的文件, 具体逻辑代码忽略。
+        }
+
+        if (commandLine.hasOption('p')) {
+            // 解析参数p，p参数用来单独设置配置属性和属性值，具体逻辑代码忽略。
+        }
+
+        MixAll.properties2Object(ServerUtil.commandLine2Properties(commandLine), namesrvConfig);
+
+        if (null == namesrvConfig.getRocketmqHome()) {
+            System.out.printf("Please set the %s variable in your environment to match the location of the RocketMQ installation%n", MixAll.ROCKETMQ_HOME_ENV);
+            System.exit(-2);
+        }
+
+        // 加载日志配置文件
+        LoggerContext lc = (LoggerContext) LoggerFactory.getILoggerFactory();
+        JoranConfigurator configurator = new JoranConfigurator();
+        configurator.setContext(lc);
+        lc.reset();
+        configurator.doConfigure(namesrvConfig.getRocketmqHome() + "/conf/logback_namesrv.xml");
+
+        log = InternalLoggerFactory.getLogger(LoggerName.NAMESRV_LOGGER_NAME);
+
+        MixAll.printObjectProperties(log, namesrvConfig);
+        MixAll.printObjectProperties(log, nettyServerConfig);
+
+        // 使用前面两个 configure 对象实例化 NamesrvController对象。
+        final NamesrvController controller = new NamesrvController(namesrvConfig, nettyServerConfig);
+
+        // remember all configs to prevent discard
+        controller.getConfiguration().registerConfig(properties);
+
+        return controller;
+    }
+```
+
+> 这里主要做了两件事，1.把所有的配置信息解析成 NamesrvConfig 和 NettyServerConfig 对象。2.传入使用配置对象实例化NamesrvController对象。
+
+- 下面看下实例化 NamesrvController 的构造方法做可哪些事
+
+```java
+ public NamesrvController(NamesrvConfig namesrvConfig, NettyServerConfig nettyServerConfig) {
+   this.namesrvConfig = namesrvConfig;
+   this.nettyServerConfig = nettyServerConfig;
+   this.kvConfigManager = new KVConfigManager(this);
+   this.routeInfoManager = new RouteInfoManager();
+   this.brokerHousekeepingService = new BrokerHousekeepingService(this);
+   this.configuration = new Configuration(
+     log,
+     this.namesrvConfig, this.nettyServerConfig
+   );
+   this.configuration.setStorePathFromConfig(this.namesrvConfig, "configStorePath");
+ }
+```
+
+> 就是一些对象的赋值操作，测试 NamesrvController 对象创建完毕。
+
+- 启动方法 start(controller)
+
+```java
+   public static NamesrvController start(final NamesrvController controller) throws Exception {
+
+        if (null == controller) {
+            throw new IllegalArgumentException("NamesrvController is null");
+        }
+				// 执行 NamesrvController 的初始化方法
+        boolean initResult = controller.initialize();
+        if (!initResult) {
+            controller.shutdown();
+            System.exit(-3);
+        }
+				// 注册钩子方法，服务关闭是执行，做一些清理工作。
+        Runtime.getRuntime().addShutdownHook(new ShutdownHookThread(log, new Callable<Void>() {
+            @Override
+            public Void call() throws Exception {
+                controller.shutdown();
+                return null;
+            }
+        }));
+				
+        // 执行启动
+        controller.start();
+
+        return controller;
+    }
+```
+
+> 这里重要有两个方法，controller.initialize() 和  controller.start()，下面具体看下执行逻辑。
+
+- controller.initialize()
+
+```java
+ public boolean initialize() {
+
+   // 加载 kv存储模块，读取配置中的 kvConfig.json文件内容。
+   this.kvConfigManager.load();
+
+   // 实例化 Netty服务端对象，用于处理客户端和 broker的请求。
+   this.remotingServer = new NettyRemotingServer(this.nettyServerConfig, this.brokerHousekeepingService);
+
+   this.remotingExecutor =
+     Executors.newFixedThreadPool(nettyServerConfig.getServerWorkerThreads(), new ThreadFactoryImpl("RemotingExecutorThread_"));
+
+   this.registerProcessor();
+
+   // 定时扫描 broker，移除不活跃的broker
+   this.scheduledExecutorService.scheduleAtFixedRate(new Runnable() {
+     @Override
+     public void run() {
+       NamesrvController.this.routeInfoManager.scanNotActiveBroker();
+     }
+   }, 5, 10, TimeUnit.SECONDS);
+
+   // 定时器，每隔10min打印一次KV配置
+   this.scheduledExecutorService.scheduleAtFixedRate(new Runnable() {
+     @Override
+     public void run() {
+       NamesrvController.this.kvConfigManager.printAllPeriodically();
+     }
+   }, 1, 10, TimeUnit.MINUTES);
+
+   // 如果开启 SSL执行，执行以下逻辑，会做一些SSL验证工作,易注册监听器证书变化话的处理程序
+   if (TlsSystemConfig.tlsMode != TlsMode.DISABLED) {
+     // Register a listener to reload SslContext
+     try {
+       // ...
+     } catch (Exception e) {
+       log.warn("FileWatchService created error, can't load the certificate dynamically");
+     }
+   }
+   return true;
+ }
+```
+
+- controller.start()
+
+```java
+public void start() throws Exception {
+  // 启动 netty 服务
+  this.remotingServer.start();
+
+  if (this.fileWatchService != null) {
+    // 检测SSL证书文件是否变化，如果有变，及时加载最新的秘钥。
+    this.fileWatchService.start();
+  }
+}
+```
+
+> remotingServer.start() 会真正启动一个NettyServer程序用于处理来自其他服务的请求，熟悉Netty的话会非常容易看明白。 
+
+以上是 NameServer 启动的源码解析，可以总结为两步。
+
+1.	解析配置文件。
+2.	启动NettyServer服务。
 
 ### Broker 源码
 
