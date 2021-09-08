@@ -25,5 +25,5 @@ sphinx-autobuild source build/html
 # others
 
 - [Sphinx文档基础语法教程](https://github.com/telzhou618/blog/tree/main/source/others/sphinx.rst)
-- [家庭常备用药指南](https://github.com/telzhou618/blog/tree/main/source/others/foresight.md)
-- [规划职业生涯的三大阶段](https://github.com/telzhou618/blog/tree/main/source/others/drugs.md)
+- [规划职业生涯的三大阶段](https://github.com/telzhou618/blog/tree/main/source/others/foresight.md)
+- [家庭常备用药指南](https://github.com/telzhou618/blog/tree/main/source/others/drugs.md)
