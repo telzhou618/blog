@@ -1,4 +1,4 @@
-# Liunx 常用命令
+# Linux 常用命令
 
 ## less
 
@@ -82,5 +82,20 @@ chmod -R a+r *
 chmod 777 file
 # 等价
 chmod a=rwx file
+```
+
+## lsof
+
+查看端口占用情况。
+
+```sh
+# 查看端口占用情况
+user@mac ~> lsof -i tcp:9876
+COMMAND   PID       USER   FD   TYPE             DEVICE SIZE/OFF NODE NAME
+java    71184 zhougaojun   69u  IPv6 0xd4d49114bb1da0f5      0t0  TCP *:sd (LISTEN)
+# jps 打印进程
+user@mac ~> jps
+21873 Main
+71184 NamesrvStartup
 ```
 
