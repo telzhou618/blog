@@ -25,7 +25,7 @@
 
 # Tips
 
-博客模板使用的是 [https://readthedocs.org](https://readthedocs.org)文档平台,可以免费托管，免费提供二级域名，感兴趣的朋友可以了解一下。
+博客模板使用的是 [https://readthedocs.org](https://readthedocs.org)文档平台，可以免费托管静态文档，免费提供域名，感兴趣的朋友可以了解一下。
 
 # run
 ```shell
