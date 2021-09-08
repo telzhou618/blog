@@ -1,11 +1,6 @@
 # my blog
 [https://telzhou-blog.readthedocs.io](https://telzhou-blog.readthedocs.io)
 
-# run
-```shell
-sphinx-autobuild source build/html
-```
-
 # contents
 
 - [Liunx 常用命令](https://github.com/telzhou618/blog/tree/main/source/2021/linux.md)
@@ -27,3 +22,13 @@ sphinx-autobuild source build/html
 - [Sphinx文档基础语法教程](https://github.com/telzhou618/blog/tree/main/source/others/sphinx.rst)
 - [规划职业生涯的三大阶段](https://github.com/telzhou618/blog/tree/main/source/others/foresight.md)
 - [家庭常备用药指南](https://github.com/telzhou618/blog/tree/main/source/others/drugs.md)
+
+# Tips
+
+博客模板使用的是 [https://readthedocs.org](https://readthedocs.org)文档平台,可以免费托管，免费提供二级域名，感兴趣的朋友可以了解一下。
+
+# run
+```shell
+sphinx-autobuild source build/html
+```
+
