@@ -3,7 +3,7 @@
 
 # contents
 
-- [Liunx 常用命令](https://github.com/telzhou618/blog/tree/main/source/2021/linux.md)
+- [Linux 常用命令](https://github.com/telzhou618/blog/tree/main/source/2021/linux.md)
 - [Vscode 常用快捷键](https://github.com/telzhou618/blog/tree/main/source/2021/vscode.md)
 - [Redis 从入门到放弃](https://github.com/telzhou618/blog/tree/main/source/2021/redis.md)
 - [MySQL 优化及索引设计规范](https://github.com/telzhou618/blog/tree/main/source/2021/mysql-review.md)
