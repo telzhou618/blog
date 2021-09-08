@@ -14,35 +14,39 @@
 - 相比全自动的hibernat, SQL编写工作量大。
 - 对数据库SQL依赖比较强，移植性差。
 
-## Configuration
+## MyBatis 核心组件
+
+### Configuration
 
 配置类，MyBatis启动是会解析全局配置文件全局配置文件 mybatis-config.xml及所有的 XXXMapper.xml文件,解析结果存入Configuration对象中，该对象是单例的，存在会话的上下文，贯穿这个MyBatis的执行过程。
 
-## SqlSession
+### SqlSession
 
 SQL执行的顶层接口，定义了和数据库交互的所有方法，有CRUD及开始事务、提交事务、回滚事务等，有一个默认的实现类 DefaultSqlSession，持有Configuration和Executor对象，SqlSession本身没有做多少有用的事，具体的SQL语句执行委托给了Executor执行。
 
-## Executor
+### Executor
 
 执行器，实现了SqlSession定义的SQL操作方法，实现了MyBatis的一级缓存，具体的SQL执行委托给它的下一级 StatementHandler。
 
-## StatementHandler
+### StatementHandler
 
 真正和数据交互的对象，实现了执行SQL语句，自身持有ParameterHandler和ResultSetHandler对象。
 
-## ParameterHandler
+### ParameterHandler
 
 负责参数解析。
 
-## ResultSetHandler
+### ResultSetHandler
 
 负责处理SQL执行结果。
 
 以上是MyBtais重要的几个组成部件，下面分析一下具体的源码执行流程。
 
-## Configuration配置解析
+## MyBatis 源码分析
 
-从实例开始
+### 从Configuration配置解析开始
+
+实例如下：
 
 ```java
 public static void main(String[] args) throws IOException {
@@ -130,7 +134,7 @@ private void propertiesElement(XNode context) throws Exception {
 
 parse方法最终调用parseConfiguration解析不同的节点，比如解析properties节点，把解析出来的结果设置到 configuration配置文件中，到此配置解析结束。
 
-## selectOne 一条SQL语句是如何执行
+### selectOne 一条SQL语句是如何执行
 
 从获取SqlSession对象开始，前面已经完成了配置解析，下面先看下如何生成SqlSession对象。
 
@@ -450,6 +454,6 @@ public class DefaultResultSetHandler implements ResultSetHandler {
 }
 ```
 
-## 完整流程图
+## MyBatis 源码完整流程图
 
 ![](https://raw.githubusercontent.com/telzhou618/images/main/img/MyBatis%E6%BA%90%E7%A0%81%E6%89%A7%E8%A1%8C%E6%B5%81%E7%A8%8B%20(1).png)
