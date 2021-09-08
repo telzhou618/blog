@@ -13,7 +13,7 @@ sphinx-autobuild source build/html
 - [Redis 从入门到放弃](https://github.com/telzhou618/blog/tree/main/source/2021/redis.md)
 - [MySQL 优化及索引设计规范](https://github.com/telzhou618/blog/tree/main/source/2021/mysql-review.md)
 - [Spring 事务源码解析](https://github.com/telzhou618/blog/tree/main/source/2021/spring-transaction.md)
-- [MyBatis 源码解析](https://github.com/telzhou618/blog/tree/main/source/2021/mybatis)
+- [MyBatis 源码解析](https://github.com/telzhou618/blog/tree/main/source/2021/mybatis.md)
 - [Docker & Docker-compose](https://github.com/telzhou618/blog/tree/main/source/2021/docker.md)
 - [Commons-pool2 应用与实战](https://github.com/telzhou618/blog/tree/main/source/2021/commons-pool2.md)
 - [Redis 或 Zookeeper 实现分布式锁](https://github.com/telzhou618/blog/tree/main/source/2021/distributed-lock.md)
