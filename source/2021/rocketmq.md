@@ -176,7 +176,7 @@ RocketMQ 实现消息持久化存储，主要有如下三种文件组成。
 
 ### NameServer 源码
 
-- 启动类 NamesrvStartup
+- 从启动类 NamesrvStartup 开始
 
 ```java
 public static void main(String[] args) {
@@ -375,20 +375,481 @@ public void start() throws Exception {
 1.	解析配置文件。
 2.	启动NettyServer服务。
 
-### Broker 源码
+### Broker 启动源码
 
-- Broker 启动源码
-- Broker 发消息源码
-- Broker 负责均衡源码
-- Broker 刷盘持久化源码
+待补充
 
-### Consumer 源码
+### Producer 发消息给Broker 源码
 
-- Consumer 推模式源码
+Producer 发消息主要代码在  client 包中实现，发消息的方式大致有三种，单向、同步、异步。发消息的默认入口都在 DefaultMQProducerImpl 这个类中，下面看下最简单的单向发消息接口。
+
+**单向发消息**
+
+DefaultMQProducerImpl 类中的 sendOneway 是单向发消息的入口
+
+```java
+public void sendOneway(Message msg) throws MQClientException, RemotingException, InterruptedException {
+  try {
+    this.sendDefaultImpl(msg, CommunicationMode.ONEWAY, null, this.defaultMQProducer.getSendMsgTimeout());
+  } catch (MQBrokerException e) {
+    throw new MQClientException("unknown exception", e);
+  }
+}
+```
+
+接着调用私有方法 this.sendDefaualtImpl()
+
+```java
+private SendResult sendDefaultImpl(
+  Message msg,
+  final CommunicationMode communicationMode,
+  final SendCallback sendCallback,
+  final long timeout
+) throws MQClientException, RemotingException, MQBrokerException, InterruptedException {
+  // ... 忽略一些不必要的代码
+  // 获取Topic信息
+  TopicPublishInfo topicPublishInfo = this.tryToFindTopicPublishInfo(msg.getTopic());
+  // 判断Topic是否正常
+  if (topicPublishInfo != null && topicPublishInfo.ok()) {
+    boolean callTimeout = false;
+    MessageQueue mq = null;
+    Exception exception = null;
+    SendResult sendResult = null;
+    int timesTotal = communicationMode == CommunicationMode.SYNC ? 1 + this.defaultMQProducer.getRetryTimesWhenSendFailed() : 1;
+    int times = 0;
+    String[] brokersSent = new String[timesTotal];
+    for (; times < timesTotal; times++) {
+      String lastBrokerName = null == mq ? null : mq.getBrokerName();
+      // 选择一个MessageQueue
+      MessageQueue mqSelected = this.selectOneMessageQueue(topicPublishInfo, lastBrokerName);
+      if (mqSelected != null) {
+        mq = mqSelected;
+        brokersSent[times] = mq.getBrokerName();
+        try {
+          beginTimestampPrev = System.currentTimeMillis();
+          if (times > 0) {
+            //Reset topic with namespace during resend.
+            msg.setTopic(this.defaultMQProducer.withNamespace(msg.getTopic()));
+          }
+          long costTime = beginTimestampPrev - beginTimestampFirst;
+          if (timeout < costTime) {
+            callTimeout = true;
+            break;
+          }
+          // 发送消息
+          sendResult = this.sendKernelImpl(msg, mq, communicationMode, sendCallback, topicPublishInfo, timeout - costTime);
+          endTimestamp = System.currentTimeMillis();
+          this.updateFaultItem(mq.getBrokerName(), endTimestamp - beginTimestampPrev, false);
+          switch (communicationMode) {
+            case ASYNC:
+              // 异步发送消息不关心返回值
+              return null;
+            case ONEWAY:
+              // 单项发送消息不关心返回值
+              return null;
+            case SYNC:
+              // 同步发送消息需要返回值
+              if (sendResult.getSendStatus() != SendStatus.SEND_OK) {
+                if (this.defaultMQProducer.isRetryAnotherBrokerWhenNotStoreOK()) {
+                  continue;
+                }
+              }
+              return sendResult;
+            default:
+              break;
+          }
+        } catch (RemotingException e) {
+          // 处理异常...
+        }
+      } else {
+        break;
+      }
+    }
+
+    if (sendResult != null) {
+      return sendResult;
+    }
+    //...
+  }
+
+```
+
+> 1. 选择要发送的 MessageQucence, 这里有具体的负载均衡算实现。
+> 2. 发送消息都调用私有方法 this.sendKernelImpl 实现。
+
+ this.sendKernelImpl()方法
+
+```java
+ private SendResult sendKernelImpl(final Message msg,
+        final MessageQueue mq,
+        final CommunicationMode communicationMode,
+        final SendCallback sendCallback,
+        final TopicPublishInfo topicPublishInfo,
+        final long timeout) throws MQClientException, RemotingException, MQBrokerException, InterruptedException {
+        long beginStartTime = System.currentTimeMillis();
+        // 根据 broker名称查询地址
+        String brokerAddr = this.mQClientFactory.findBrokerAddressInPublish(mq.getBrokerName());
+        if (null == brokerAddr) {
+            tryToFindTopicPublishInfo(mq.getTopic());
+            brokerAddr = this.mQClientFactory.findBrokerAddressInPublish(mq.getBrokerName());
+        }
+
+        SendMessageContext context = null;
+        if (brokerAddr != null) {
+            brokerAddr = MixAll.brokerVIPChannel(this.defaultMQProducer.isSendMessageWithVIPChannel(), brokerAddr);
+
+            byte[] prevBody = msg.getBody();
+            try {
+                //for MessageBatch,ID has been set in the generating process
+                // 设置参数，忽略
+
+                SendResult sendResult = null;
+                switch (communicationMode) {
+                    case ASYNC:
+                        // 异步发送消息
+                        Message tmpMessage = msg;
+                        boolean messageCloned = false;
+                        if (msgBodyCompressed) {
+                            //If msg body was compressed, msgbody should be reset using prevBody.
+                            //Clone new message using commpressed message body and recover origin massage.
+                            //Fix bug:https://github.com/apache/rocketmq-externals/issues/66
+                            tmpMessage = MessageAccessor.cloneMessage(msg);
+                            messageCloned = true;
+                            msg.setBody(prevBody);
+                        }
+
+                        if (topicWithNamespace) {
+                            if (!messageCloned) {
+                                tmpMessage = MessageAccessor.cloneMessage(msg);
+                                messageCloned = true;
+                            }
+                            msg.setTopic(NamespaceUtil.withoutNamespace(msg.getTopic(), this.defaultMQProducer.getNamespace()));
+                        }
+
+                        long costTimeAsync = System.currentTimeMillis() - beginStartTime;
+                        if (timeout < costTimeAsync) {
+                            throw new RemotingTooMuchRequestException("sendKernelImpl call timeout");
+                        }
+                        // 同步发送实现
+                        sendResult = this.mQClientFactory.getMQClientAPIImpl().sendMessage(
+                            brokerAddr,
+                            mq.getBrokerName(),
+                            tmpMessage,
+                            requestHeader,
+                            timeout - costTimeAsync,
+                            communicationMode,
+                            sendCallback,
+                            topicPublishInfo,
+                            this.mQClientFactory,
+                            this.defaultMQProducer.getRetryTimesWhenSendAsyncFailed(),
+                            context,
+                            this);
+                        break;
+                    // 单项发送消息
+                    case ONEWAY:
+                    // 同步发送消息
+                    case SYNC:
+                        long costTimeSync = System.currentTimeMillis() - beginStartTime;
+                        if (timeout < costTimeSync) {
+                            throw new RemotingTooMuchRequestException("sendKernelImpl call timeout");
+                        }
+                         // 同步发送实现
+                        sendResult = this.mQClientFactory.getMQClientAPIImpl().sendMessage(
+                            brokerAddr,
+                            mq.getBrokerName(),
+                            msg,
+                            requestHeader,
+                            timeout - costTimeSync,
+                            communicationMode,
+                            context,
+                            this);
+                        break;
+                    default:
+                        assert false;
+                        break;
+                }
+
+                if (this.hasSendMessageHook()) {
+                    context.setSendResult(sendResult);
+                    this.executeSendMessageHookAfter(context);
+                }
+
+                return sendResult;
+            } catch (RemotingException e) {
+                // ...
+            } finally {
+               // ...
+            }
+        }
+    }
+```
+
+> 不管什么方式的消息，最后都调用  this.mQClientFactory.getMQClientAPIImpl().sendMessage()实现。
+
+this.mQClientFactory.getMQClientAPIImpl().sendMessage()
+
+```java
+ public SendResult sendMessage(
+        final String addr,
+        final String brokerName,
+        final Message msg,
+        final SendMessageRequestHeader requestHeader,
+        final long timeoutMillis,
+        final CommunicationMode communicationMode,
+        final SendCallback sendCallback,
+        final TopicPublishInfo topicPublishInfo,
+        final MQClientInstance instance,
+        final int retryTimesWhenSendFailed,
+        final SendMessageContext context,
+        final DefaultMQProducerImpl producer
+    ) throws RemotingException, MQBrokerException, InterruptedException {
+        long beginStartTime = System.currentTimeMillis();
+   			// 生成 RemotingCommand 对象
+        RemotingCommand request = null;
+        String msgType = msg.getProperty(MessageConst.PROPERTY_MESSAGE_TYPE);
+        boolean isReply = msgType != null && msgType.equals(MixAll.REPLY_MESSAGE_FLAG);
+        if (isReply) {
+            if (sendSmartMsg) {
+                SendMessageRequestHeaderV2 requestHeaderV2 = SendMessageRequestHeaderV2.createSendMessageRequestHeaderV2(requestHeader);
+                request = RemotingCommand.createRequestCommand(RequestCode.SEND_REPLY_MESSAGE_V2, requestHeaderV2);
+            } else {
+                request = RemotingCommand.createRequestCommand(RequestCode.SEND_REPLY_MESSAGE, requestHeader);
+            }
+        } else {
+            if (sendSmartMsg || msg instanceof MessageBatch) {
+                SendMessageRequestHeaderV2 requestHeaderV2 = SendMessageRequestHeaderV2.createSendMessageRequestHeaderV2(requestHeader);
+                request = RemotingCommand.createRequestCommand(msg instanceof MessageBatch ? RequestCode.SEND_BATCH_MESSAGE : RequestCode.SEND_MESSAGE_V2, requestHeaderV2);
+            } else {
+                request = RemotingCommand.createRequestCommand(RequestCode.SEND_MESSAGE, requestHeader);
+            }
+        }
+        request.setBody(msg.getBody());
+
+        switch (communicationMode) {
+            case ONEWAY:
+                // 单向发送
+                this.remotingClient.invokeOneway(addr, request, timeoutMillis);
+                return null;
+            case ASYNC:
+                // 异步发送
+                final AtomicInteger times = new AtomicInteger();
+                long costTimeAsync = System.currentTimeMillis() - beginStartTime;
+                if (timeoutMillis < costTimeAsync) {
+                    throw new RemotingTooMuchRequestException("sendMessage call timeout");
+                }
+                this.sendMessageAsync(addr, brokerName, msg, timeoutMillis - costTimeAsync, request, sendCallback, topicPublishInfo, instance,
+                    retryTimesWhenSendFailed, times, context, producer);
+                return null;
+            case SYNC:
+                // 同步发送
+                long costTimeSync = System.currentTimeMillis() - beginStartTime;
+                if (timeoutMillis < costTimeSync) {
+                    throw new RemotingTooMuchRequestException("sendMessage call timeout");
+                }
+                return this.sendMessageSync(addr, brokerName, msg, timeoutMillis - costTimeSync, request);
+            default:
+                assert false;
+                break;
+        }
+
+        return null;
+    }
+```
+
+> 1. 生成消息的载体对象 RemotingCommand，该对象存储这和其他服务交互的传输数据信息。
+> 2. 又根据发消息的类型区分同步、异步、单向三种方式，调用具体的实现。
+> 3. 单向调用 remotingClient.invokeOneway()实现。
+> 4. 异步调用 this.sendMessageAsync() 实现。
+> 5. 同步调用 this.sendMessageSync() 实现。
+
+单向发送消息 NettyRemotingClient.remotingClient.invokeOneway()
+
+```java
+@Override
+public void invokeOneway(String addr, RemotingCommand request, long timeoutMillis) throws InterruptedException,
+RemotingConnectException, RemotingTooMuchRequestException, RemotingTimeoutException, RemotingSendRequestException {
+  // 获取发送消息的 Channel，Netty 的对象
+  final Channel channel = this.getAndCreateChannel(addr);
+  if (channel != null && channel.isActive()) {
+    try {
+      doBeforeRpcHooks(addr, request);
+      // 单向发送消息
+      this.invokeOnewayImpl(channel, request, timeoutMillis);
+    } catch (RemotingSendRequestException e) {
+      log.warn("invokeOneway: send request exception, so close the channel[{}]", addr);
+      this.closeChannel(addr, channel);
+      throw e;
+    }
+  } else {
+    this.closeChannel(addr, channel);
+    throw new RemotingConnectException(addr);
+  }
+}
+```
+
+this.invokeOnewayImpl(channel, request, timeoutMillis)
+
+```java
+ public void invokeOnewayImpl(final Channel channel, final RemotingCommand request, final long timeoutMillis)
+        throws InterruptedException, RemotingTooMuchRequestException, RemotingTimeoutException, RemotingSendRequestException {
+        request.markOnewayRPC();
+       // 使用信号量控制并发
+        boolean acquired = this.semaphoreOneway.tryAcquire(timeoutMillis, TimeUnit.MILLISECONDS);
+        if (acquired) {
+            final SemaphoreReleaseOnlyOnce once = new SemaphoreReleaseOnlyOnce(this.semaphoreOneway);
+            try {
+                // 异步发送消息，Netty交互
+                channel.writeAndFlush(request).addListener(new ChannelFutureListener() {
+                    @Override
+                    public void operationComplete(ChannelFuture f) throws Exception {
+                        once.release();
+                        // 发送完成回调处理
+                        if (!f.isSuccess()) {
+                            log.warn("send a request command to channel <" + channel.remoteAddress() + "> failed.");
+                        }
+                    }
+                });
+            } catch (Exception e) {
+                once.release();
+                log.warn("write send a request command to channel <" + channel.remoteAddress() + "> failed.");
+                throw new RemotingSendRequestException(RemotingHelper.parseChannelRemoteAddr(channel), e);
+            }
+        } else {
+            // 获取信号量超时处理...
+        }
+    }
+```
+
+> 1. 可以看到使用 channel.writeAndFlush() 异步发送消息，新增了一个监听器，发送失败会打印告警日志。
+> 2. 单向发送并没有关心返回值。
+> 3. 使用信号量 Semaphore 控制并发。
+> 4. 至此发送单向消息完成，这里就是使用 netty 和其他服务交互。
+
+**同步发送**
+
+在前面的分析中，三种发消息的代码都是公用的，在 MQClientAPIImpl.sendMessage() 中才有不同的分支。
+
+同步发送开始 MQClientAPIImpl.sendMessageSync()
+
+```java
+ private SendResult sendMessageSync(
+        final String addr,
+        final String brokerName,
+        final Message msg,
+        final long timeoutMillis,
+        final RemotingCommand request
+    ) throws RemotingException, MQBrokerException, InterruptedException {
+        // 发送消息
+        RemotingCommand response = this.remotingClient.invokeSync(addr, request, timeoutMillis);
+        assert response != null;
+        // 处理返回结果
+        return this.processSendResponse(brokerName, msg, response,addr);
+    }
+```
+
+> 可以看到在底层交互的对象请求和接收用都封装在了同一个对象 RemotingCommand。
+
+ this.remotingClient.invokeSync(addr, request, timeoutMillis)
+
+```java
+@Override
+public RemotingCommand invokeSync(String addr, final RemotingCommand request, long timeoutMillis)
+  throws InterruptedException, RemotingConnectException, RemotingSendRequestException, RemotingTimeoutException {
+  long beginStartTime = System.currentTimeMillis();
+  final Channel channel = this.getAndCreateChannel(addr);
+  if (channel != null && channel.isActive()) {
+    try {
+      doBeforeRpcHooks(addr, request);
+      long costTime = System.currentTimeMillis() - beginStartTime;
+      if (timeoutMillis < costTime) {
+        throw new RemotingTimeoutException("invokeSync call timeout");
+      }
+      // 执行发送消息
+      RemotingCommand response = this.invokeSyncImpl(channel, request, timeoutMillis - costTime);
+      doAfterRpcHooks(RemotingHelper.parseChannelRemoteAddr(channel), request, response);
+      return response;
+    } catch (RemotingSendRequestException e) {
+      // 
+    } 
+  } 
+}
+```
+
+this.invokeSyncImpl()
+
+```java
+public RemotingCommand invokeSyncImpl(final Channel channel, final RemotingCommand request,
+                                      final long timeoutMillis)
+  throws InterruptedException, RemotingSendRequestException, RemotingTimeoutException {
+  final int opaque = request.getOpaque();
+
+  try {
+    // 构建返回对象，实例化 countDownLatch
+    final ResponseFuture responseFuture = new ResponseFuture(channel, opaque, timeoutMillis, null, null);
+    this.responseTable.put(opaque, responseFuture);
+    final SocketAddress addr = channel.remoteAddress();
+    // 使用 nettyClient 异步发送消息。
+    // 但需求是要返回值，要这里用到 countDownLatch，等到有返回结果才结束。
+    // RemotingCommand responseCommand = responseFuture.waitResponse(timeoutMillis); ->  this.countDownLatch.await(timeoutMillis, TimeUnit.MILLISECONDS); 这里主线程等到子线程返回
+    // responseFuture.putResponse(null); -> this.countDownLatch.countDown(); 结束等到，接续执行
+    channel.writeAndFlush(request).addListener(new ChannelFutureListener() {
+      @Override
+      public void operationComplete(ChannelFuture f) throws Exception {
+        if (f.isSuccess()) {
+          responseFuture.setSendRequestOK(true);
+          return;
+        } else {
+          responseFuture.setSendRequestOK(false);
+        }
+
+        responseTable.remove(opaque);
+        responseFuture.setCause(f.cause());
+        responseFuture.putResponse(null);
+        log.warn("send a request command to channel <" + addr + "> failed.");
+      }
+    });
+    // 同步等等返回结果
+    RemotingCommand responseCommand = responseFuture.waitResponse(timeoutMillis);
+    return responseCommand;
+  } finally {
+    this.responseTable.remove(opaque);
+  }
+}
+```
+
+```java
+public void putResponse(final RemotingCommand responseCommand) {
+  this.responseCommand = responseCommand;
+  this.countDownLatch.countDown();
+}
+```
+
+```java
+public RemotingCommand waitResponse(final long timeoutMillis) throws InterruptedException {
+  this.countDownLatch.await(timeoutMillis, TimeUnit.MILLISECONDS);
+  return this.responseCommand;
+}
+```
+
+> 1. 发消息给 broker 都是异步的。
+> 2. 但这里使用了 CountDownLatch 等待异步线程返回，让后构建一个返回对象返回。
+> 3. 总体是同步的。
+
+
+
+### Broker 负载均衡源码
+
+待补充
+
+### Broker 刷盘持久化源码
+
+待补充
+
+### Consumer 推模式源码
 
 推模式实时性高，但占用网络资源多。
 
-- Consumer 拉模式源码
+### Consumer 拉模式源码
 
 拉模式可以批量消费，实时性不高，但能减少网络带宽。
 
