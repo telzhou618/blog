@@ -720,10 +720,10 @@ this.invokeOnewayImpl(channel, request, timeoutMillis)
     }
 ```
 
-> 1. 可以看到使用 channel.writeAndFlush() 异步发送消息，新增了一个监听器，发送失败会打印告警日志。
-> 2. 单向发送并没有关心返回值。
-> 3. 使用信号量 Semaphore 控制并发。
-> 4. 至此发送单向消息完成，这里就是使用 netty 和其他服务交互。
+> 1. 至此发送单向消息完成，这里就是使用 netty 和其他服务交互了，不再深入。
+> 2. 可以看到使用 channel.writeAndFlush() 异步发送消息，新增了一个监听器，发送失败会打印告警日志。
+> 3. 单向发送并没有关心返回值。
+> 4. 使用信号量 Semaphore 控制并发。
 
 **同步发送**
 
@@ -747,7 +747,7 @@ this.invokeOnewayImpl(channel, request, timeoutMillis)
     }
 ```
 
-> 可以看到在底层交互的对象请求和接收用都封装在了同一个对象 RemotingCommand。
+> 可以看到在底层交互的对象请求和接收都封装在了同一个对象 RemotingCommand 中。
 
  this.remotingClient.invokeSync(addr, request, timeoutMillis)
 
@@ -831,8 +831,8 @@ public RemotingCommand waitResponse(final long timeoutMillis) throws Interrupted
 }
 ```
 
-> 1. 发消息给 broker 都是异步的。
-> 2. 但这里使用了 CountDownLatch 等待异步线程返回，让后构建一个返回对象返回。
+> 1. 发消息给 broker 都一样，都是异步的。
+> 2. 但这里使用了 CountDownLatch 等待异步线程返回，这里是和单向发送消息最大的不同。
 > 3. 总体是同步的。
 
 
