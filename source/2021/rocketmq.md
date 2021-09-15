@@ -21,7 +21,7 @@
 
 ## RocketMQ 消息发送方式
 
-### 单项发送： 
+### 单项发送
 
 只负责发出去，不管是否成功，没有返回值，一般用在可靠性不高的场景，如记录日志。
 
@@ -341,7 +341,7 @@ public static NamesrvController main0(String[] args) {
      }
    }, 1, 10, TimeUnit.MINUTES);
 
-   // 如果开启 SSL执行，执行以下逻辑，会做一些SSL验证工作,易注册监听器证书变化话的处理程序
+   // 如果开启SSL支持，执行以下逻辑，监听器证书变化时会实时更新，做到热加载
    if (TlsSystemConfig.tlsMode != TlsMode.DISABLED) {
      // Register a listener to reload SslContext
      try {
@@ -362,7 +362,7 @@ public void start() throws Exception {
   this.remotingServer.start();
 
   if (this.fileWatchService != null) {
-    // 检测SSL证书文件是否变化，如果有变，及时加载最新的秘钥。
+    // 检测SSL证书文件是否变化，如果有变，及时加载最新的秘钥信息。
     this.fileWatchService.start();
   }
 }
@@ -377,7 +377,260 @@ public void start() throws Exception {
 
 ### Broker 启动源码
 
-待补充
+从启动类 BrokerStartup 开始
+
+```java
+public static void main(String[] args) {
+  start(createBrokerController(args));
+}
+```
+
+> 有两个核心方法，createBrokerController 方法创建BrokerController对象，然后传个 start 方法执行启动工作。
+
+
+
+createBrokerController 方法
+
+```java
+public static BrokerController createBrokerController(String[] args) {
+  try {
+    //PackageConflictDetect.detectFastjson();
+    Options options = ServerUtil.buildCommandlineOptions(new Options());
+    commandLine = ServerUtil.parseCmdLine("mqbroker", args, buildCommandlineOptions(options),
+                                          new PosixParser());
+    if (null == commandLine) {
+      System.exit(-1);
+    }
+
+    // 实例化 broker 的配置对象
+    final BrokerConfig brokerConfig = new BrokerConfig();
+    // 实例化 Netty 配置对象
+    final NettyServerConfig nettyServerConfig = new NettyServerConfig();
+    final NettyClientConfig nettyClientConfig = new NettyClientConfig();
+
+    // 设置 Netty 的端口
+    nettyServerConfig.setListenPort(10911);
+    
+    // 实例化消息存储的配置对象
+    final MessageStoreConfig messageStoreConfig = new MessageStoreConfig();
+
+    if (BrokerRole.SLAVE == messageStoreConfig.getBrokerRole()) {
+      int ratio = messageStoreConfig.getAccessMessageInMemoryMaxRatio() - 10;
+      messageStoreConfig.setAccessMessageInMemoryMaxRatio(ratio);
+    }
+
+    if (commandLine.hasOption('c')) {
+      // 解析参数 c
+    }
+
+    MixAll.properties2Object(ServerUtil.commandLine2Properties(commandLine), brokerConfig);
+
+    if (null == brokerConfig.getRocketmqHome()) {
+      System.out.printf("Please set the %s variable in your environment to match the location of the RocketMQ installation", MixAll.ROCKETMQ_HOME_ENV);
+      System.exit(-2);
+    }
+
+    String namesrvAddr = brokerConfig.getNamesrvAddr();
+    if (null != namesrvAddr) {
+      try {
+        String[] addrArray = namesrvAddr.split(";");
+        for (String addr : addrArray) {
+          RemotingUtil.string2SocketAddress(addr);
+        }
+      } catch (Exception e) {
+        System.out.printf(
+          "The Name Server Address[%s] illegal, please set it as follows, \"127.0.0.1:9876;192.168.0.1:9876\"%n",
+          namesrvAddr);
+        System.exit(-3);
+      }
+    }
+
+    switch (messageStoreConfig.getBrokerRole()) {
+      case ASYNC_MASTER:
+      case SYNC_MASTER:
+        brokerConfig.setBrokerId(MixAll.MASTER_ID);
+        break;
+      case SLAVE:
+        if (brokerConfig.getBrokerId() <= 0) {
+          System.out.printf("Slave's brokerId must be > 0");
+          System.exit(-3);
+        }
+
+        break;
+      default:
+        break;
+    }
+
+    if (messageStoreConfig.isEnableDLegerCommitLog()) {
+      brokerConfig.setBrokerId(-1);
+    }
+
+    messageStoreConfig.setHaListenPort(nettyServerConfig.getListenPort() + 1);
+    LoggerContext lc = (LoggerContext) LoggerFactory.getILoggerFactory();
+    JoranConfigurator configurator = new JoranConfigurator();
+    configurator.setContext(lc);
+    lc.reset();
+    configurator.doConfigure(brokerConfig.getRocketmqHome() + "/conf/logback_broker.xml");
+
+    if (commandLine.hasOption('p')) {
+      // 解析参数 p
+    } else if (commandLine.hasOption('m')) {
+      // 解析参数 m
+    }
+
+    log = InternalLoggerFactory.getLogger(LoggerName.BROKER_LOGGER_NAME);
+    MixAll.printObjectProperties(log, brokerConfig);
+    MixAll.printObjectProperties(log, nettyServerConfig);
+    MixAll.printObjectProperties(log, nettyClientConfig);
+    MixAll.printObjectProperties(log, messageStoreConfig);
+
+    // 实例化 BrokerController 对象
+    final BrokerController controller = new BrokerController(
+      brokerConfig,
+      nettyServerConfig,
+      nettyClientConfig,
+      messageStoreConfig);
+    // remember all configs to prevent discard
+    controller.getConfiguration().registerConfig(properties);
+
+    boolean initResult = controller.initialize();
+    if (!initResult) {
+      controller.shutdown();
+      System.exit(-3);
+    }
+
+    // 注册一个 JVM 关闭时的钩子方法，用于做一些清理工作
+    Runtime.getRuntime().addShutdownHook(new Thread(new Runnable() {
+      private volatile boolean hasShutdown = false;
+      private AtomicInteger shutdownTimes = new AtomicInteger(0);
+
+      @Override
+      public void run() {
+        synchronized (this) {
+          log.info("Shutdown hook was invoked, {}", this.shutdownTimes.incrementAndGet());
+          if (!this.hasShutdown) {
+            this.hasShutdown = true;
+            long beginTime = System.currentTimeMillis();
+            controller.shutdown();
+            long consumingTimeTotal = System.currentTimeMillis() - beginTime;
+            log.info("Shutdown hook over, consuming total time(ms): {}", consumingTimeTotal);
+          }
+        }
+      }
+    }, "ShutdownHook"));
+
+    return controller;
+  } catch (Throwable e) {
+    e.printStackTrace();
+    System.exit(-1);
+  }
+
+  return null;
+}
+```
+
+```java
+public BrokerController(
+  final BrokerConfig brokerConfig,
+  final NettyServerConfig nettyServerConfig,
+  final NettyClientConfig nettyClientConfig,
+  final MessageStoreConfig messageStoreConfig
+) {
+  this.brokerConfig = brokerConfig;
+  this.nettyServerConfig = nettyServerConfig;
+  this.nettyClientConfig = nettyClientConfig;
+  this.messageStoreConfig = messageStoreConfig;
+  this.consumerOffsetManager = new ConsumerOffsetManager(this);
+  this.topicConfigManager = new TopicConfigManager(this);
+  this.pullMessageProcessor = new PullMessageProcessor(this);
+  this.pullRequestHoldService = new PullRequestHoldService(this);
+  this.messageArrivingListener = new NotifyMessageArrivingListener(this.pullRequestHoldService);
+  this.consumerIdsChangeListener = new DefaultConsumerIdsChangeListener(this);
+  //...
+}
+```
+
+> 以上为实例化 BrokerController 的过程.
+
+start 方法
+
+```java
+public static BrokerController start(BrokerController controller) {
+    try {
+      controller.start();
+      return controller;
+    } catch (Throwable e) {
+      e.printStackTrace();
+      System.exit(-1);
+    }
+    return null;
+  }
+```
+
+```java
+public void start() throws Exception {
+  // 启动消息存储服务
+  if (this.messageStore != null) {
+    this.messageStore.start();
+  }
+  // 启动 Netty 服务，用于接收外部的请求
+  if (this.remotingServer != null) {
+    this.remotingServer.start();
+  }
+  
+  if (this.fastRemotingServer != null) {
+    this.fastRemotingServer.start();
+  }
+  // 启动配置文件监控服务，用于配置热更新。
+  if (this.fileWatchService != null) {
+    this.fileWatchService.start();
+  }
+
+  if (this.brokerOuterAPI != null) {
+    this.brokerOuterAPI.start();
+  }
+
+  if (this.pullRequestHoldService != null) {
+    this.pullRequestHoldService.start();
+  }
+
+  if (this.clientHousekeepingService != null) {
+    this.clientHousekeepingService.start();
+  }
+
+  if (this.filterServerManager != null) {
+    this.filterServerManager.start();
+  }
+
+  if (!messageStoreConfig.isEnableDLegerCommitLog()) {
+    startProcessorByHa(messageStoreConfig.getBrokerRole());
+    handleSlaveSynchronize(messageStoreConfig.getBrokerRole());
+    this.registerBrokerAll(true, false, true);
+  }
+
+  this.scheduledExecutorService.scheduleAtFixedRate(new Runnable() {
+
+    @Override
+    public void run() {
+      try {
+        BrokerController.this.registerBrokerAll(true, false, brokerConfig.isForceRegister());
+      } catch (Throwable e) {
+        log.error("registerBrokerAll Exception", e);
+      }
+    }
+  }, 1000 * 10, Math.max(10000, Math.min(brokerConfig.getRegisterNameServerPeriod(), 60000)), TimeUnit.MILLISECONDS);
+
+  if (this.brokerStatsManager != null) {
+    this.brokerStatsManager.start();
+  }
+
+  if (this.brokerFastFailure != null) {
+    this.brokerFastFailure.start();
+  }
+}
+```
+
+> 以上为启动 Broker 的过程。
 
 ### Producer 发消息给Broker 源码
 
@@ -481,107 +734,107 @@ private SendResult sendDefaultImpl(
 
 ```java
  private SendResult sendKernelImpl(final Message msg,
-        final MessageQueue mq,
-        final CommunicationMode communicationMode,
-        final SendCallback sendCallback,
-        final TopicPublishInfo topicPublishInfo,
-        final long timeout) throws MQClientException, RemotingException, MQBrokerException, InterruptedException {
-        long beginStartTime = System.currentTimeMillis();
-        // 根据 broker名称查询地址
-        String brokerAddr = this.mQClientFactory.findBrokerAddressInPublish(mq.getBrokerName());
-        if (null == brokerAddr) {
-            tryToFindTopicPublishInfo(mq.getTopic());
-            brokerAddr = this.mQClientFactory.findBrokerAddressInPublish(mq.getBrokerName());
-        }
+                                   final MessageQueue mq,
+                                   final CommunicationMode communicationMode,
+                                   final SendCallback sendCallback,
+                                   final TopicPublishInfo topicPublishInfo,
+                                   final long timeout) throws MQClientException, RemotingException, MQBrokerException, InterruptedException {
+   long beginStartTime = System.currentTimeMillis();
+   // 根据 broker名称查询地址
+   String brokerAddr = this.mQClientFactory.findBrokerAddressInPublish(mq.getBrokerName());
+   if (null == brokerAddr) {
+     tryToFindTopicPublishInfo(mq.getTopic());
+     brokerAddr = this.mQClientFactory.findBrokerAddressInPublish(mq.getBrokerName());
+   }
 
-        SendMessageContext context = null;
-        if (brokerAddr != null) {
-            brokerAddr = MixAll.brokerVIPChannel(this.defaultMQProducer.isSendMessageWithVIPChannel(), brokerAddr);
+   SendMessageContext context = null;
+   if (brokerAddr != null) {
+     brokerAddr = MixAll.brokerVIPChannel(this.defaultMQProducer.isSendMessageWithVIPChannel(), brokerAddr);
 
-            byte[] prevBody = msg.getBody();
-            try {
-                //for MessageBatch,ID has been set in the generating process
-                // 设置参数，忽略
+     byte[] prevBody = msg.getBody();
+     try {
+       //for MessageBatch,ID has been set in the generating process
+       // 设置参数，忽略
 
-                SendResult sendResult = null;
-                switch (communicationMode) {
-                    case ASYNC:
-                        // 异步发送消息
-                        Message tmpMessage = msg;
-                        boolean messageCloned = false;
-                        if (msgBodyCompressed) {
-                            //If msg body was compressed, msgbody should be reset using prevBody.
-                            //Clone new message using commpressed message body and recover origin massage.
-                            //Fix bug:https://github.com/apache/rocketmq-externals/issues/66
-                            tmpMessage = MessageAccessor.cloneMessage(msg);
-                            messageCloned = true;
-                            msg.setBody(prevBody);
-                        }
+       SendResult sendResult = null;
+       switch (communicationMode) {
+         case ASYNC:
+           // 异步发送消息
+           Message tmpMessage = msg;
+           boolean messageCloned = false;
+           if (msgBodyCompressed) {
+             //If msg body was compressed, msgbody should be reset using prevBody.
+             //Clone new message using commpressed message body and recover origin massage.
+             //Fix bug:https://github.com/apache/rocketmq-externals/issues/66
+             tmpMessage = MessageAccessor.cloneMessage(msg);
+             messageCloned = true;
+             msg.setBody(prevBody);
+           }
 
-                        if (topicWithNamespace) {
-                            if (!messageCloned) {
-                                tmpMessage = MessageAccessor.cloneMessage(msg);
-                                messageCloned = true;
-                            }
-                            msg.setTopic(NamespaceUtil.withoutNamespace(msg.getTopic(), this.defaultMQProducer.getNamespace()));
-                        }
+           if (topicWithNamespace) {
+             if (!messageCloned) {
+               tmpMessage = MessageAccessor.cloneMessage(msg);
+               messageCloned = true;
+             }
+             msg.setTopic(NamespaceUtil.withoutNamespace(msg.getTopic(), this.defaultMQProducer.getNamespace()));
+           }
 
-                        long costTimeAsync = System.currentTimeMillis() - beginStartTime;
-                        if (timeout < costTimeAsync) {
-                            throw new RemotingTooMuchRequestException("sendKernelImpl call timeout");
-                        }
-                        // 同步发送实现
-                        sendResult = this.mQClientFactory.getMQClientAPIImpl().sendMessage(
-                            brokerAddr,
-                            mq.getBrokerName(),
-                            tmpMessage,
-                            requestHeader,
-                            timeout - costTimeAsync,
-                            communicationMode,
-                            sendCallback,
-                            topicPublishInfo,
-                            this.mQClientFactory,
-                            this.defaultMQProducer.getRetryTimesWhenSendAsyncFailed(),
-                            context,
-                            this);
-                        break;
-                    // 单项发送消息
-                    case ONEWAY:
-                    // 同步发送消息
-                    case SYNC:
-                        long costTimeSync = System.currentTimeMillis() - beginStartTime;
-                        if (timeout < costTimeSync) {
-                            throw new RemotingTooMuchRequestException("sendKernelImpl call timeout");
-                        }
-                         // 同步发送实现
-                        sendResult = this.mQClientFactory.getMQClientAPIImpl().sendMessage(
-                            brokerAddr,
-                            mq.getBrokerName(),
-                            msg,
-                            requestHeader,
-                            timeout - costTimeSync,
-                            communicationMode,
-                            context,
-                            this);
-                        break;
-                    default:
-                        assert false;
-                        break;
-                }
+           long costTimeAsync = System.currentTimeMillis() - beginStartTime;
+           if (timeout < costTimeAsync) {
+             throw new RemotingTooMuchRequestException("sendKernelImpl call timeout");
+           }
+           // 同步发送实现
+           sendResult = this.mQClientFactory.getMQClientAPIImpl().sendMessage(
+             brokerAddr,
+             mq.getBrokerName(),
+             tmpMessage,
+             requestHeader,
+             timeout - costTimeAsync,
+             communicationMode,
+             sendCallback,
+             topicPublishInfo,
+             this.mQClientFactory,
+             this.defaultMQProducer.getRetryTimesWhenSendAsyncFailed(),
+             context,
+             this);
+           break;
+           // 单项发送消息
+         case ONEWAY:
+           // 同步发送消息
+         case SYNC:
+           long costTimeSync = System.currentTimeMillis() - beginStartTime;
+           if (timeout < costTimeSync) {
+             throw new RemotingTooMuchRequestException("sendKernelImpl call timeout");
+           }
+           // 同步发送实现
+           sendResult = this.mQClientFactory.getMQClientAPIImpl().sendMessage(
+             brokerAddr,
+             mq.getBrokerName(),
+             msg,
+             requestHeader,
+             timeout - costTimeSync,
+             communicationMode,
+             context,
+             this);
+           break;
+         default:
+           assert false;
+           break;
+       }
 
-                if (this.hasSendMessageHook()) {
-                    context.setSendResult(sendResult);
-                    this.executeSendMessageHookAfter(context);
-                }
+       if (this.hasSendMessageHook()) {
+         context.setSendResult(sendResult);
+         this.executeSendMessageHookAfter(context);
+       }
 
-                return sendResult;
-            } catch (RemotingException e) {
-                // ...
-            } finally {
-               // ...
-            }
-        }
-    }
+       return sendResult;
+     } catch (RemotingException e) {
+       // ...
+     } finally {
+       // ...
+     }
+   }
+ }
 ```
 
 > 不管什么方式的消息，最后都调用  this.mQClientFactory.getMQClientAPIImpl().sendMessage()实现。
@@ -690,34 +943,34 @@ RemotingConnectException, RemotingTooMuchRequestException, RemotingTimeoutExcept
 this.invokeOnewayImpl(channel, request, timeoutMillis)
 
 ```java
- public void invokeOnewayImpl(final Channel channel, final RemotingCommand request, final long timeoutMillis)
-        throws InterruptedException, RemotingTooMuchRequestException, RemotingTimeoutException, RemotingSendRequestException {
-        request.markOnewayRPC();
-       // 使用信号量控制并发
-        boolean acquired = this.semaphoreOneway.tryAcquire(timeoutMillis, TimeUnit.MILLISECONDS);
-        if (acquired) {
-            final SemaphoreReleaseOnlyOnce once = new SemaphoreReleaseOnlyOnce(this.semaphoreOneway);
-            try {
-                // 异步发送消息，Netty交互
-                channel.writeAndFlush(request).addListener(new ChannelFutureListener() {
-                    @Override
-                    public void operationComplete(ChannelFuture f) throws Exception {
-                        once.release();
-                        // 发送完成回调处理
-                        if (!f.isSuccess()) {
-                            log.warn("send a request command to channel <" + channel.remoteAddress() + "> failed.");
-                        }
-                    }
-                });
-            } catch (Exception e) {
-                once.release();
-                log.warn("write send a request command to channel <" + channel.remoteAddress() + "> failed.");
-                throw new RemotingSendRequestException(RemotingHelper.parseChannelRemoteAddr(channel), e);
-            }
-        } else {
-            // 获取信号量超时处理...
+public void invokeOnewayImpl(final Channel channel, final RemotingCommand request, final long timeoutMillis)
+  throws InterruptedException, RemotingTooMuchRequestException, RemotingTimeoutException, RemotingSendRequestException {
+  request.markOnewayRPC();
+  // 使用信号量控制并发
+  boolean acquired = this.semaphoreOneway.tryAcquire(timeoutMillis, TimeUnit.MILLISECONDS);
+  if (acquired) {
+    final SemaphoreReleaseOnlyOnce once = new SemaphoreReleaseOnlyOnce(this.semaphoreOneway);
+    try {
+      // 异步发送消息，Netty交互
+      channel.writeAndFlush(request).addListener(new ChannelFutureListener() {
+        @Override
+        public void operationComplete(ChannelFuture f) throws Exception {
+          once.release();
+          // 发送完成回调处理
+          if (!f.isSuccess()) {
+            log.warn("send a request command to channel <" + channel.remoteAddress() + "> failed.");
+          }
         }
+      });
+    } catch (Exception e) {
+      once.release();
+      log.warn("write send a request command to channel <" + channel.remoteAddress() + "> failed.");
+      throw new RemotingSendRequestException(RemotingHelper.parseChannelRemoteAddr(channel), e);
     }
+  } else {
+    // 获取信号量超时处理...
+  }
+}
 ```
 
 > 1. 至此发送单向消息完成，这里就是使用 netty 和其他服务交互了，不再深入。
@@ -839,9 +1092,38 @@ public RemotingCommand waitResponse(final long timeoutMillis) throws Interrupted
 
 ### Broker 负载均衡源码
 
-待补充
+Producer 发送消息给Topic时，会选择一个MessageQuence, 默认的负载均衡算法是轮询，每个qucence大致平均分配。
 
-### Broker 刷盘持久化源码
+```java
+private SendResult sendDefaultImpl(
+    Message msg,
+    final CommunicationMode communicationMode,
+    final SendCallback sendCallback,
+    final long timeout
+  ) throws MQClientException, RemotingException, MQBrokerException, InterruptedException {
+
+	  //...
+    // 选择一个MessageQueue
+    MessageQueue mqSelected = this.selectOneMessageQueue(topicPublishInfo, lastBrokerName);
+    //...
+}
+```
+
+默认情况下最终调用下面方法，每个线程第一访问时，会随机取一个整型值，每次对该值加1取绝对值后对quence的数量取模。
+
+```java
+public MessageQueue selectOneMessageQueue() {
+  int index = this.sendWhichQueue.incrementAndGet();
+  int pos = Math.abs(index) % this.messageQueueList.size();
+  if (pos < 0)
+    pos = 0;
+  return this.messageQueueList.get(pos);
+}
+```
+
+
+
+### Broker 接收消息及刷盘持久化源码
 
 待补充
 

@@ -17,7 +17,6 @@ Redis 是一个高性能的基于内存实现的K-V存储数据库 。
 - 基于内存存储，单机容量有限。
 - 重启会加载磁盘缓存到内存，这期间不能提供服务。
 - 主从复制采用全量复制，这个过程会占用更多内存和网络资源。
-- 不支持自动容错，主从任意一个宕机会造成前端读写失败。
 
 ## Redis 应用场景
 
@@ -34,68 +33,70 @@ Redis 是一个高性能的基于内存实现的K-V存储数据库 。
 
 ### 下载安装安装
 
-```shell
-# 把下载好的redis-5.0.3.tar.gz放在/usr/local文件夹下，并解压
-wget http://download.redis.io/releases/redis-5.0.3.tar.gz
-tar xzf redis-5.0.3.tar.gz
-cd redis-5.0.3
+从源码安装
 
-# 进入到解压好的redis-5.0.3目录下，进行编译与安装
+```sh
+# donwnload
+wget https://download.redis.io/releases/redis-6.2.5.tar.gz
+tar xzf redis-6.2.5.tar.gz
+cd redis-6.2.5
 make
 
-# 修改配置
-daemonize yes  #后台启动
-protected-mode no  #关闭保护模式，开启的话，只有本机才可以访问redis
-# 需要注释掉bind
-#bind 127.0.0.1
+# run redis-server
+src/redis-server
 
-# 启动服务
-src/redis-server redis.conf
+# test
+src/redis-cli
+redis> set foo bar
+OK
+redis> get foo
+"bar"
+```
 
-# 验证启动是否成功 
-ps -ef | grep redis 
+Ubuntu 安装
 
-# 进入redis客户端 
-src/redis-cli 
+```sh
+sudo add-apt-repository ppa:redislabs/redis
+sudo apt-get update
+sudo apt-get install redis
+```
 
-# 退出客户端
-quit
+Mac 安装
 
-# 退出redis服务： 
-（1）pkill redis-server 
-（2）kill 进程号                       
-（3）src/redis-cli shutdown 
+```sh
+brew install redis
 ```
 
 ### 持久化之rdb 模式
 
-开启rdb模式
+**开启rdb模式**
 
 ```shell
-# save 60 1000 //关闭RDB只需要将所有的save保存策略注释掉即可
+# 关闭RDB只需要将所有的save保存策略注释掉即可
+save 60 1000  
 ```
 
 还可以手动执行命令生成RDB快照，进入redis客户端执行命令**save**或**bgsave**可以生成dump.rdb文件， 每次命令执行都会将所有redis内存快照到一个新的rdb文件里，并覆盖原有rdb快照文件。
 
 ### 持久化之aof模式
 
-开启aof模式
+**开启aof模式**
 
 ```sh
- appendonly yes
+appendonly yes
 ```
 
-aof策略配置
+**aof 策略配置**
 
 ```sh
-1.appendfsync always：每次有新命令追加到 AOF 文件时就执行一次 fsync ，非常慢，也非常安全。
-2 appendfsync everysec：每秒 fsync 一次，足够快，并且在故障时只会丢失 1 秒钟的数据。
-3 appendfsync no：从不 fsync ，将数据交给操作系统来处理。更快，也更不安全的选择。
+appendfsync always # 每次有新命令追加到 AOF 文件时就执行一次 fsync ，非常慢，也非常安全。
+appendfsync everysec # 每秒 fsync 一次，足够快，并且在故障时只会丢失 1 秒钟的数据。
+appendfsync no # 从不 fsync ，将数据交给操作系统来处理。更快，也更不安全的选择。
 ```
 
 ### Jedis 链接Redis
 
-引入jar包
+先引入jar包
 
 ```xml
 <dependency>
@@ -105,33 +106,33 @@ aof策略配置
 </dependency>
 ```
 
-JAVA 代码调用实例
+ JAVA 代码调用实例
 
 ```java
 public class JedisSingleTest {
-    public static void main(String[] args) throws IOException {
+  public static void main(String[] args) throws IOException {
 
-        JedisPoolConfig jedisPoolConfig = new JedisPoolConfig();
-        jedisPoolConfig.setMaxTotal(20);
-        jedisPoolConfig.setMaxIdle(10);
-        jedisPoolConfig.setMinIdle(5);
+    JedisPoolConfig jedisPoolConfig = new JedisPoolConfig();
+    jedisPoolConfig.setMaxTotal(20);
+    jedisPoolConfig.setMaxIdle(10);
+    jedisPoolConfig.setMinIdle(5);
 
-        // timeout，这里既是连接超时又是读写超时，从Jedis 2.8开始有区分connectionTimeout和soTimeout的构造函数
-        JedisPool jedisPool = new JedisPool(jedisPoolConfig, "192.168.0.60", 6379, 3000, null);
-        Jedis jedis = null;
-        try {
-            //从redis连接池里拿出一个连接执行命令
-            jedis = jedisPool.getResource();
-            System.out.println(jedis.set("single", "zhuge"));
-            System.out.println(jedis.get("single"));
-        } catch (Exception e) {
-            e.printStackTrace();
-        } finally {
-            //注意这里不是关闭连接，在JedisPool模式下，Jedis会被归还给资源池。
-            if (jedis != null)
-                jedis.close();
-        }
+    // timeout，这里既是连接超时又是读写超时，从Jedis 2.8开始有区分connectionTimeout和soTimeout的构造函数
+    JedisPool jedisPool = new JedisPool(jedisPoolConfig, "192.168.0.60", 6379, 3000, null);
+    Jedis jedis = null;
+    try {
+      //从redis连接池里拿出一个连接执行命令
+      jedis = jedisPool.getResource();
+      System.out.println(jedis.set("single", "zhuge"));
+      System.out.println(jedis.get("single"));
+    } catch (Exception e) {
+      e.printStackTrace();
+    } finally {
+      //注意这里不是关闭连接，在JedisPool模式下，Jedis会被归还给资源池。
+      if (jedis != null)
+        jedis.close();
     }
+  }
 }
 ```
 
@@ -155,7 +156,7 @@ System.out.println(results);
 
 LUA 脚本可以代替Redis的事务执行，要么所有命令都执行成功，要么都失败，是原子性的，也可以减少网络开销。
 
-在Redis控制台执行
+在Redis控制台执行：
 
 ```sh
 127.0.0.1:6379> eval "return {KEYS[1],KEYS[2],ARGV[1],ARGV[2]}" 2 key1 key2 first second
@@ -165,7 +166,9 @@ LUA 脚本可以代替Redis的事务执行，要么所有命令都执行成功�
 4) "second"
 ```
 
-在代码中使用
+在代码中使用：
+
+模拟减库存操作，如果后面执行失败，减掉的库存会回滚。
 
 ```java
 jedis.set("product_stock_10016", "15");  //初始化商品10016的库存
@@ -181,9 +184,34 @@ Object obj = jedis.eval(script, Arrays.asList("product_stock_10016"), Arrays.asL
 System.out.println(obj);
 ```
 
-> 以上代码模拟减库存操作，如果后面执行失败，减掉的库存会回滚。
+### Redis Key 淘汰策略
 
-## Redis主从模式
+Redis缓存达到最大内存限制时会执行淘汰策略，如下命令设置最大内存。
+
+```sh
+maxmemory 100mb
+```
+
+如下配置key淘汰策略，默认noeviction（拒绝请求）。
+
+```sh
+maxmemory-policy noeviction
+```
+
+全部配置参数：
+
+- **noeviction**  达到内存限制时返回错误，直接拒绝，del命令除外，是Redis的默认策略。
+- **allkeys-lru** 尝试删除最近最少使用的，也就是优先驱逐最长时间没使用的。
+- **volatile-lru** 尝试删除最近最少的使用的，但仅限设置了过期时间的key。
+- **allkeys-random** 随机驱逐key。
+- **volatile-random** 随机驱逐key, 但仅限设置了过期时间的key。
+- **volatile-ttl** 驱逐设置了过期时间的key, 优先驱逐生存期较短的。
+- **allkeys-lfu** 优先驱逐最近最不常使用的，也就是优先驱逐一定时间内使用次数最少的，4.1 新增的。
+- **volatile-lfu** 优先驱逐最近最不常使用的，但仅限设置了过期时间的key，4.1 新增的。
+
+
+
+## Redis 主从模式
 
 ![image-20210728183045747](https://raw.githubusercontent.com/telzhou618/images/main/img/image-20210728183045747.png)
 
@@ -293,7 +321,7 @@ public class JedisSentinelTest {
 
 ### spring-boot 连接哨兵
 
-- 引入依赖的jar包
+引入依赖的jar包
 
 ```xml
 <dependency>
@@ -307,7 +335,7 @@ public class JedisSentinelTest {
 </dependency>
 ```
 
-- 配置连接信息
+配置连接信息
 
 ```yaml
 server:
@@ -328,7 +356,7 @@ spring:
         max-wait: 1000
 ```
 
-- 使用代码
+使用代码
 
 ```java
 @RestController
@@ -420,7 +448,7 @@ Redis 集群至少需要3个主节点，一般需要给每个主节点配一个�
 
 ### java 操作Redis集群
 
-- 引入依赖
+引入依赖
 
 ```xml
 <dependency>
@@ -430,7 +458,7 @@ Redis 集群至少需要3个主节点，一般需要给每个主节点配一个�
 </dependency>
 ```
 
-- java 使用实例
+java 使用实例
 
 ```java
 public class JedisClusterTest {
@@ -468,7 +496,7 @@ public class JedisClusterTest {
 
 ### Spring-boot 操作Redis集群
 
-- 引入依赖
+引入依赖
 
 ```xml
 <dependency>
@@ -482,7 +510,7 @@ public class JedisClusterTest {
 </dependency>
 ```
 
-- 配置链接信息
+配置链接信息
 
 ```yaml
 server:
@@ -503,7 +531,7 @@ spring:
         max-wait: 1000
 ```
 
-- 使用代码
+使用代码
 
 ```java
 @RestController
@@ -532,7 +560,71 @@ Cluster 默认会对 key 值使用 crc16 算法进行 hash 得到一个整数值
 
 
 
+## Redis 高级操作
+
+### 海量数据插入
+
+假如用一条条执行 SET的方式插入百万级的数据量，虽然每条命令执行很快，但是网络来来回回折腾带来的开销也不容小觑，为了执行海量数据批量导入，可以结合redis管道完成。
+
+首先将要导入的数据以命令的方式写入到文件中，如下：
+
+/tmp/big-data.txt
+
+```sh
+SET name zhangsan
+SET name1 lisi
+SET name2 wangwu
+SET name3 zhaoliu
+```
+
+然后执行以下命令导入
+
+```sh
+cat big-data.txt | redis-cli --pipe
+```
+
+执行结果
+
+```sh
+All data transferred. Waiting for the last reply...
+Last reply received from server.
+errors: 0, replies: 1000000
+```
+
 ## Redis 核心原理
+
+### 单线程模型
+
+
+
+### 字符串数据据结构SDS
+
+SDS源码
+
+```c
+struct sdshdr {
+    // 记录 buf 数组中已使用字节的数量
+    // 等于 SDS 所保存字符串的长度
+    int len;
+    // 记录 buf 数组中未使用字节的数量
+    int free;
+    // 字节数组，用于保存字符串
+    char buf[];
+};
+```
+
+SDS相比C字符串
+
+![image-20210914203441733](https://raw.githubusercontent.com/telzhou618/images/main/img/image-20210914203441733.png)
+
+- SDS 用单独字段维护字符的长度。
+  - 字段用于记录字符串的长度，获取时间复杂度为O(1), C字符没有单独的字段记录，获取字符串长度时需要遍历字符串计算，时间复杂度为O(n)。
+- SDS 支持动态扩容机制。
+  - C字符做字符串拼接时，可能由于空间不足导致溢出。
+  - SDS字符串会自动扩容，在执行append操作时，首先判断原字符串剩余空间是否足够，如果不够先扩容，扩容的大小是现有字符串实际长度的两倍，即len等于free，这种扩容叫做预分配扩容机制。
+  - 在字符串删除一部分时会执行惰性缩容策略，也就是不会立即回收空间的空间，而是留着将来使用，同时SDS也提供API给用户在必要的是收到回收空间。
+- SDS 兼容部分C字符串函数。
+  - SDS和C字符串一样保留以空字符"\0"结尾结尾的规则，可以支持很多C字符串函数。
 
 ## Redis 常见问题及解决
 
