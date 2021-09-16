@@ -315,7 +315,7 @@ auto-aof-rewrite-min-size 64mb   # aof文件至少要达到64M才会自动重写
 
 ## Redis 主从模式
 
-![image-20210728183045747](https://raw.githubusercontent.com/telzhou618/images/main/img/image-20210728183045747.png)
+![image-20210916170350362](https://raw.githubusercontent.com/telzhou618/images/main/img/image-20210916170350362.png)
 
 ### 主从模式配置
 
@@ -361,7 +361,7 @@ master收到PSYNC命令后，会在后台进行数据持久化通过bgsave生成
 
 sentinel哨兵是特殊的redis服务，不提供读写服务，主要用来监控redis实例节点。 哨兵架构下client端第一次从哨兵找出redis的主节点，后续就直接访问redis的主节点，不会每次都通过 sentinel代理访问redis的主节点，当redis的主节点发生变化，哨兵会第一时间感知到，并且将新的redis 主节点通知给client端(这里面redis的client端一般都实现了订阅功能，订阅sentinel发布的节点变动消息)
 
-![image-20210728183140654](https://raw.githubusercontent.com/telzhou618/images/main/img/image-20210728183140654.png)
+![image-20210916170505193](https://raw.githubusercontent.com/telzhou618/images/main/img/image-20210916170505193.png)
 
 ### **redis 哨兵架构搭建步骤**
 
@@ -394,34 +394,34 @@ src/redis-cli -p 26379
 
 ```java
 public class JedisSentinelTest {
-    public static void main(String[] args) throws IOException {
+  public static void main(String[] args) throws IOException {
 
-        JedisPoolConfig config = new JedisPoolConfig();
-        config.setMaxTotal(20);
-        config.setMaxIdle(10);
-        config.setMinIdle(5);
+    JedisPoolConfig config = new JedisPoolConfig();
+    config.setMaxTotal(20);
+    config.setMaxIdle(10);
+    config.setMinIdle(5);
 
-        String masterName = "mymaster";
-        Set<String> sentinels = new HashSet<String>();
-        sentinels.add(new HostAndPort("192.168.0.60",26379).toString());
-        sentinels.add(new HostAndPort("192.168.0.60",26380).toString());
-        sentinels.add(new HostAndPort("192.168.0.60",26381).toString());
-        //JedisSentinelPool其实本质跟JedisPool类似，都是与redis主节点建立的连接池
-        //JedisSentinelPool并不是说与sentinel建立的连接池，而是通过sentinel发现redis主节点并与其建立连接
-        JedisSentinelPool jedisSentinelPool = new JedisSentinelPool(masterName, sentinels, config, 3000, null);
-        Jedis jedis = null;
-        try {
-            jedis = jedisSentinelPool.getResource();
-            System.out.println(jedis.set("sentinel", "zhuge"));
-            System.out.println(jedis.get("sentinel"));
-        } catch (Exception e) {
-            e.printStackTrace();
-        } finally {
-            //注意这里不是关闭连接，在JedisPool模式下，Jedis会被归还给资源池。
-            if (jedis != null)
-                jedis.close();
-        }
+    String masterName = "mymaster";
+    Set<String> sentinels = new HashSet<String>();
+    sentinels.add(new HostAndPort("192.168.0.60",26379).toString());
+    sentinels.add(new HostAndPort("192.168.0.60",26380).toString());
+    sentinels.add(new HostAndPort("192.168.0.60",26381).toString());
+    //JedisSentinelPool其实本质跟JedisPool类似，都是与redis主节点建立的连接池
+    //JedisSentinelPool并不是说与sentinel建立的连接池，而是通过sentinel发现redis主节点并与其建立连接
+    JedisSentinelPool jedisSentinelPool = new JedisSentinelPool(masterName, sentinels, config, 3000, null);
+    Jedis jedis = null;
+    try {
+      jedis = jedisSentinelPool.getResource();
+      System.out.println(jedis.set("sentinel", "zhuge"));
+      System.out.println(jedis.get("sentinel"));
+    } catch (Exception e) {
+      e.printStackTrace();
+    } finally {
+      //注意这里不是关闭连接，在JedisPool模式下，Jedis会被归还给资源池。
+      if (jedis != null)
+        jedis.close();
     }
+  }
 }
 ```
 
@@ -505,7 +505,7 @@ public class IndexController {
 
 Redis 集群至少需要3个主节点，一般需要给每个主节点配一个从节点。
 
-![image-20210728183234826](https://raw.githubusercontent.com/telzhou618/images/main/img/image-20210728183234826.png)
+![image-20210916170601331](https://raw.githubusercontent.com/telzhou618/images/main/img/image-20210916170601331.png)
 
 ### Redis集群搭建
 
@@ -573,33 +573,32 @@ java 使用实例
 ```java
 public class JedisClusterTest {
     public static void main(String[] args) throws IOException {
+      JedisPoolConfig config = new JedisPoolConfig();
+      config.setMaxTotal(20);
+      config.setMaxIdle(10);
+      config.setMinIdle(5);
 
-        JedisPoolConfig config = new JedisPoolConfig();
-        config.setMaxTotal(20);
-        config.setMaxIdle(10);
-        config.setMinIdle(5);
+      Set<HostAndPort> jedisClusterNode = new HashSet<HostAndPort>();
+      jedisClusterNode.add(new HostAndPort("192.168.0.61", 8001));
+      jedisClusterNode.add(new HostAndPort("192.168.0.62", 8002));
+      jedisClusterNode.add(new HostAndPort("192.168.0.63", 8003));
+      jedisClusterNode.add(new HostAndPort("192.168.0.61", 8004));
+      jedisClusterNode.add(new HostAndPort("192.168.0.62", 8005));
+      jedisClusterNode.add(new HostAndPort("192.168.0.63", 8006));
 
-        Set<HostAndPort> jedisClusterNode = new HashSet<HostAndPort>();
-        jedisClusterNode.add(new HostAndPort("192.168.0.61", 8001));
-        jedisClusterNode.add(new HostAndPort("192.168.0.62", 8002));
-        jedisClusterNode.add(new HostAndPort("192.168.0.63", 8003));
-        jedisClusterNode.add(new HostAndPort("192.168.0.61", 8004));
-        jedisClusterNode.add(new HostAndPort("192.168.0.62", 8005));
-        jedisClusterNode.add(new HostAndPort("192.168.0.63", 8006));
-
-        JedisCluster jedisCluster = null;
-        try {
-            //connectionTimeout：指的是连接一个url的连接等待时间
-            //soTimeout：指的是连接上一个url，获取response的返回等待时间
-            jedisCluster = new JedisCluster(jedisClusterNode, 6000, 5000, 10, "zhuge", config);
-            System.out.println(jedisCluster.set("cluster", "zhuge"));
-            System.out.println(jedisCluster.get("cluster"));
-        } catch (Exception e) {
-            e.printStackTrace();
-        } finally {
-            if (jedisCluster != null)
-                jedisCluster.close();
-        }
+      JedisCluster jedisCluster = null;
+      try {
+        //connectionTimeout：指的是连接一个url的连接等待时间
+        //soTimeout：指的是连接上一个url，获取response的返回等待时间
+        jedisCluster = new JedisCluster(jedisClusterNode, 6000, 5000, 10, "zhuge", config);
+        System.out.println(jedisCluster.set("cluster", "zhuge"));
+        System.out.println(jedisCluster.get("cluster"));
+      } catch (Exception e) {
+        e.printStackTrace();
+      } finally {
+        if (jedisCluster != null)
+          jedisCluster.close();
+      }
     }
 }
 ```
@@ -646,17 +645,15 @@ spring:
 ```java
 @RestController
 public class IndexController {
+  private static final Logger logger = LoggerFactory.getLogger(IndexController.class);
+  @Autowired
+  private StringRedisTemplate stringRedisTemplate;
 
-    private static final Logger logger = LoggerFactory.getLogger(IndexController.class);
-
-    @Autowired
-    private StringRedisTemplate stringRedisTemplate;
-
-    @RequestMapping("/test_cluster")
-    public void testCluster() throws InterruptedException {
-       stringRedisTemplate.opsForValue().set("zhuge", "666");
-       System.out.println(stringRedisTemplate.opsForValue().get("zhuge"));
-    }
+  @RequestMapping("/test_cluster")
+  public void testCluster() throws InterruptedException {
+    stringRedisTemplate.opsForValue().set("zhuge", "666");
+    System.out.println(stringRedisTemplate.opsForValue().get("zhuge"));
+  }
 }
 ```
 
@@ -684,14 +681,14 @@ SDS源码
 
 ```c
 struct sdshdr {
-    // 记录 buf 数组中已使用字节的数量
-    // 等于 SDS 所保存字符串的长度
-    int len;
-    // 记录 buf 数组中未使用字节的数量
-    int free;
-    // 字节数组，用于保存字符串
-    char buf[];
-};
+  // 记录 buf 数组中已使用字节的数量
+  // 等于 SDS 所保存字符串的长度
+  int len;
+  // 记录 buf 数组中未使用字节的数量
+  int free;
+  // 字节数组，用于保存字符串
+  char buf[];
+}
 ```
 
 SDS相比C字符串
