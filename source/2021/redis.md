@@ -31,7 +31,7 @@ Redis 是一个高性能的基于内存实现的K-V存储数据库 。
 
 ## Redis 基础
 
-### 下载安装安装
+### Redis 下载安装安装
 
 从源码安装
 
@@ -65,33 +65,6 @@ Mac 安装
 
 ```sh
 brew install redis
-```
-
-### 持久化之rdb 模式
-
-**开启rdb模式**
-
-```shell
-# 关闭RDB只需要将所有的save保存策略注释掉即可
-save 60 1000  
-```
-
-还可以手动执行命令生成RDB快照，进入redis客户端执行命令**save**或**bgsave**可以生成dump.rdb文件， 每次命令执行都会将所有redis内存快照到一个新的rdb文件里，并覆盖原有rdb快照文件。
-
-### 持久化之aof模式
-
-**开启aof模式**
-
-```sh
-appendonly yes
-```
-
-**aof 策略配置**
-
-```sh
-appendfsync always # 每次有新命令追加到 AOF 文件时就执行一次 fsync ，非常慢，也非常安全。
-appendfsync everysec # 每秒 fsync 一次，足够快，并且在故障时只会丢失 1 秒钟的数据。
-appendfsync no # 从不 fsync ，将数据交给操作系统来处理。更快，也更不安全的选择。
 ```
 
 ### Jedis 链接Redis
@@ -209,6 +182,135 @@ maxmemory-policy noeviction
 - **allkeys-lfu** 优先驱逐最近最不常使用的，也就是优先驱逐一定时间内使用次数最少的，4.1 新增的。
 - **volatile-lfu** 优先驱逐最近最不常使用的，但仅限设置了过期时间的key，4.1 新增的。
 
+### Redis 批量插入海量数据
+
+假如用一条条执行 SET的方式插入百万级的数据量，虽然每条命令执行很快，但是网络来来回回折腾带来的开销也不容小觑，为了执行海量数据批量导入，可以结合redis管道完成。
+
+首先将要导入的数据以命令的方式写入到文件中，如下：
+
+/tmp/big-data.txt
+
+```sh
+SET name zhangsan
+SET name1 lisi
+SET name2 wangwu
+SET name3 zhaoliu
+```
+
+然后执行以下命令导入
+
+```sh
+cat big-data.txt | redis-cli --pipe
+```
+
+执行结果
+
+```sh
+All data transferred. Waiting for the last reply...
+Last reply received from server.
+errors: 0, replies: 1000000
+```
+
+### Redis 遍历所有元素
+
+- **keys * 遍历**
+
+keys * 会一次返回匹配到的所有key, 当数据量大时要慎用，避免阻塞redis。
+
+实例1：查询所有的key
+
+```sh
+127.0.0.1:6379> keys *
+1) "name3"
+2) "name1"
+3) "name2"
+4) "name"
+```
+
+实例2：查询所有前缀为name的key
+
+```sh
+127.0.0.1:6379> keys name*
+1) "name3"
+2) "name1"
+3) "name2"
+4) "name"
+```
+
+- **scan 渐进式遍历**
+
+scan 遍历可以做到分页遍历，数据量大是比较合适，每次请求会返回下次一的游标，直达游标为0结束，但是在遍历过程中如果有key新增或删除可能出现新重复数据等情况，使用时要注意。
+
+命令格式
+
+```sh
+SCAN cursor [MATCH pattern] [COUNT count] 
+```
+
+实例：扫描key前缀为name的元素，每次返回2条。
+
+```sh
+127.0.0.1:6379> scan 0 match name* count 2
+1) "1"
+2) 1) "name3"
+   2) "name2"
+   3) "name"
+```
+
+```sh
+127.0.0.1:6379> scan 1 match name* count 2
+1) "0"
+2) 1) "name1"
+127.0.0.1:6379>
+```
+
+> 当返回的 cursor 为0时结束。
+
+## Redis 持久化方案
+
+### 持久化之rdb 模式
+
+根据配置规则redis 会以生生二进制文件dump.rdb的方式持久化数据到磁盘，每次持久化会生成一个新的文件覆盖旧的文件，默认是开启的，配置方法如下所示。
+
+**开启rdb模式**
+
+```shell
+save 900 1
+save 300 10
+save 60 10000 # 60s内有10000个key被改动则触发rdb持久化
+```
+
+ 关闭RDB只需要将所有的save保存策略注释掉即可。
+
+还可以手动执行命令生成RDB快照，进入redis客户端执行命令**save**或**bgsave**可以生成dump.rdb文件， 每次命令执行都会将所有redis内存快照到一个新的rdb文件里，并覆盖原有rdb快照文件。save 会同步执行，阻塞客户端的操作，bgsave会fork一个子进程处理异步处理。
+
+### 持久化之aof模式
+
+aof 是以记类似日志的方式持久化，默认是关闭的，需要执行以下命令开启。
+
+**开启aof模式**
+
+```sh
+appendonly yes
+```
+
+**aof 策略配置**
+
+```sh
+appendfsync always # 每次有新命令追加到 AOF 文件时就执行一次 fsync ，非常慢，也非常安全。
+appendfsync everysec # 每秒 fsync 一次，足够快，并且在故障时只会丢失 1 秒钟的数据。
+appendfsync no # 从不 fsync ，将数据交给操作系统来处理。更快，也更不安全的选择。
+```
+
+**aof 重写**
+
+多次修改同一个key的值后，经过aof重写会只保留最后一次修改的命令，这样可以保持aof文件只保留有效的命且减少占用存储空间，默认自动开启。
+
+```sh
+auto-aof-rewrite-percentage 100  # aof文件自上一次重写后文件大小增长了100%则再次触发重写
+auto-aof-rewrite-min-size 64mb   # aof文件至少要达到64M才会自动重写，文件太小恢复速度本来就 很快，重写的意义不大
+```
+
 
 
 ## Redis 主从模式
@@ -250,6 +352,10 @@ redis-cli -p 6380
 master收到PSYNC命令后，会在后台进行数据持久化通过bgsave生成最新的rdb快照文件，持久化期间，master会继续接收客户端的请求，它会把这些可能修改数据集的请求缓存在内存中。当持久化进行完毕以后，master会把这份rdb文件数据集发送给slave，slave会把接收到的数据进行持久化生成rdb，然后再加载到内存中。然后，master再将之前缓存在内存中的命令发送给slave。
 
 当master与slave之间的连接由于某些原因而断开时，slave能够自动重连Master，如果master收到了多个slave并发连接请求，它只会进行一次持久化，而不是一个连接一次，然后再把这一份持久化的数据发送给多个并发连接的slave。
+
+###  主从模式的缺点
+
+无法实现自动故障转移，主节点挂了从节点需要手动顶上去。
 
 ## Redis 哨兵模式
 
@@ -390,6 +496,10 @@ public class IndexController {
     }
 }
 ```
+
+### 哨兵模式的缺点
+
+虽然实现了自动故障转移，主节点挂了从节点会自动顶上去，但集群中只能有一个主节点提供服务，无法适应大量的数据存储，一个节点的内存毕竟的有限的，下面的集模式可以改进次问题，Redis集群模式可以实现数据分片，把不同的数据存储在不同的节点上，理论上可以做到无限大内存。
 
 ## Redis 集群模式
 
@@ -560,44 +670,15 @@ Cluster 默认会对 key 值使用 crc16 算法进行 hash 得到一个整数值
 
 
 
-## Redis 高级操作
-
-### 海量数据插入
-
-假如用一条条执行 SET的方式插入百万级的数据量，虽然每条命令执行很快，但是网络来来回回折腾带来的开销也不容小觑，为了执行海量数据批量导入，可以结合redis管道完成。
-
-首先将要导入的数据以命令的方式写入到文件中，如下：
-
-/tmp/big-data.txt
-
-```sh
-SET name zhangsan
-SET name1 lisi
-SET name2 wangwu
-SET name3 zhaoliu
-```
-
-然后执行以下命令导入
-
-```sh
-cat big-data.txt | redis-cli --pipe
-```
-
-执行结果
-
-```sh
-All data transferred. Waiting for the last reply...
-Last reply received from server.
-errors: 0, replies: 1000000
-```
-
 ## Redis 核心原理
 
 ### 单线程模型
 
+Redis之所以快是因为：1、基于内存操作，2-单线程没有上下文切换，基于epoll时间分发模型。
 
+所有的连接都放在一个队列，注册到事件分发器上，如果有客户端发送数据，分发器或通知线程处理。
 
-### 字符串数据据结构SDS
+### 简单动态字符串SDS
 
 SDS源码
 
@@ -626,6 +707,45 @@ SDS相比C字符串
 - SDS 兼容部分C字符串函数。
   - SDS和C字符串一样保留以空字符"\0"结尾结尾的规则，可以支持很多C字符串函数。
 
+### 链表
+
+### 跳跃表
+
 ## Redis 常见问题及解决
 
-## Redis 参考
+### 缓存穿透
+
+描述：查询了根本不存在的数据，导致请求打倒数据库。产生原因：自身业务代码或数据问题、恶意攻击、爬虫。
+
+解决方案：1.缓存空对象。2.布隆过滤器。功能：布隆过期中不存在的对象一定不存，存在的不一定存在；特点：只能加数据数据，不能删数据。需要预先把所有数据初始化到布隆过滤器；Redis对应的产品：Redison。
+
+### 缓存失效(击穿)
+
+描述：同一时间大量缓存失效导致请求直达数据库，造成数据库压力过大。
+
+解决方案：在设置过期时间时加上一个随机值。
+
+### 缓存雪崩
+
+描述：缓存无法支持大量请求宕机，请求全部打到数据库。
+
+解决方案：1.使用缓存高可用架构，如：Redis Sentinel 或 Redis Cluster。2.使用限流熔断并降级，如：Sentinel或Hystrix。3.提前演练，模拟宕机后做出一些应对情况。
+
+### 热点缓存失效重建
+
+描述：热点缓存失效，重建又比较好耗时，出现这种情况时大量请求会直达后端，有大量线程重建缓存，会造成后端压力过大。
+
+解决方案：加一个分布式锁，只允许一个缓存重建缓存。
+
+### 缓存与数据库不一致
+
+描述：在并发情况同时操作数据库和缓存可能导致缓存与数据库不一致。
+
+解决方案：1.大部分场景是容忍短时间内缓存与数据库不一致的，只有设置过期时间即可，不能容忍不一致的可以加锁实现，但会牺牲一定的性能。
+
+## Redis 参考文档
+
+- redis 官方文档： [https://redis.io/documentation](https://redis.io/documentation)
+
+- redis 设计与实现：[http://redisbook.com/](http://redisbook.com/)
+
