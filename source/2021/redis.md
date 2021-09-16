@@ -317,7 +317,7 @@ auto-aof-rewrite-min-size 64mb   # aof文件至少要达到64M才会自动重写
 
 ## Redis 主从模式
 
-<img src="https://raw.githubusercontent.com/telzhou618/images/main/img/image-20210916170951500.png" alt="image-20210916170951500" style="zoom:50%;" />
+<img src="https://raw.githubusercontent.com/telzhou618/images/main/img/image-20210916170951500.png" alt="image-20210916170951500" style="zoom: 25%;" />
 
 ### 主从模式配置
 
