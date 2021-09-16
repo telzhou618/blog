@@ -36,7 +36,7 @@ Redis 是一个高性能的基于内存实现的K-V存储数据库 。
 从源码安装
 
 ```sh
-# donwnload
+# download
 wget https://download.redis.io/releases/redis-6.2.5.tar.gz
 tar xzf redis-6.2.5.tar.gz
 cd redis-6.2.5
