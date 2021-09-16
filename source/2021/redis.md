@@ -1,5 +1,7 @@
 # Redis 从入门到放弃
 
+![img](https://raw.githubusercontent.com/telzhou618/images/main/img01/1*1gUAG0m0infLs92uSpw9nA.png)
+
 ## Redis 是什么
 
 Redis 是一个高性能的基于内存实现的K-V存储数据库 。
@@ -315,7 +317,7 @@ auto-aof-rewrite-min-size 64mb   # aof文件至少要达到64M才会自动重写
 
 ## Redis 主从模式
 
-![image-20210916170350362](https://raw.githubusercontent.com/telzhou618/images/main/img/image-20210916170350362.png)
+<img src="https://raw.githubusercontent.com/telzhou618/images/main/img/image-20210916170951500.png" alt="image-20210916170951500" style="zoom:50%;" />
 
 ### 主从模式配置
 
@@ -353,6 +355,10 @@ master收到PSYNC命令后，会在后台进行数据持久化通过bgsave生成
 
 当master与slave之间的连接由于某些原因而断开时，slave能够自动重连Master，如果master收到了多个slave并发连接请求，它只会进行一次持久化，而不是一个连接一次，然后再把这一份持久化的数据发送给多个并发连接的slave。
 
+### 主从模式部分复制
+
+<img src="https://raw.githubusercontent.com/telzhou618/images/main/img/image-20210916171248307.png" alt="image-20210916171248307" style="zoom:50%;" />
+
 ###  主从模式的缺点
 
 无法实现自动故障转移，主节点挂了从节点需要手动顶上去。
@@ -361,7 +367,7 @@ master收到PSYNC命令后，会在后台进行数据持久化通过bgsave生成
 
 sentinel哨兵是特殊的redis服务，不提供读写服务，主要用来监控redis实例节点。 哨兵架构下client端第一次从哨兵找出redis的主节点，后续就直接访问redis的主节点，不会每次都通过 sentinel代理访问redis的主节点，当redis的主节点发生变化，哨兵会第一时间感知到，并且将新的redis 主节点通知给client端(这里面redis的client端一般都实现了订阅功能，订阅sentinel发布的节点变动消息)
 
-![image-20210916170505193](https://raw.githubusercontent.com/telzhou618/images/main/img/image-20210916170505193.png)
+<img src="https://raw.githubusercontent.com/telzhou618/images/main/img/image-20210916170505193.png" alt="image-20210916170505193" style="zoom:50%;" />
 
 ### **redis 哨兵架构搭建步骤**
 
@@ -505,7 +511,7 @@ public class IndexController {
 
 Redis 集群至少需要3个主节点，一般需要给每个主节点配一个从节点。
 
-![image-20210916170601331](https://raw.githubusercontent.com/telzhou618/images/main/img/image-20210916170601331.png)
+<img src="https://raw.githubusercontent.com/telzhou618/images/main/img/image-20210916170601331.png" alt="image-20210916170601331" style="zoom:50%;" />
 
 ### Redis集群搭建
 
