@@ -317,7 +317,7 @@ auto-aof-rewrite-min-size 64mb   # aof文件至少要达到64M才会自动重写
 
 ## Redis 主从模式
 
-![redis主从](https://raw.githubusercontent.com/telzhou618/images/main/img01/format%252Cpng.png)
+![redis主从](https://raw.githubusercontent.com/telzhou618/images/main/img01/2adbc6e661eb44a2add519bb590e86e5%7Etplv-k3u1fbpfcp-watermark.image)
 
 ### 主从模式配置
 
@@ -354,10 +354,6 @@ redis-cli -p 6380
 master收到PSYNC命令后，会在后台进行数据持久化通过bgsave生成最新的rdb快照文件，持久化期间，master会继续接收客户端的请求，它会把这些可能修改数据集的请求缓存在内存中。当持久化进行完毕以后，master会把这份rdb文件数据集发送给slave，slave会把接收到的数据进行持久化生成rdb，然后再加载到内存中。然后，master再将之前缓存在内存中的命令发送给slave。
 
 当master与slave之间的连接由于某些原因而断开时，slave能够自动重连Master，如果master收到了多个slave并发连接请求，它只会进行一次持久化，而不是一个连接一次，然后再把这一份持久化的数据发送给多个并发连接的slave。
-
-### 主从模式部分复制
-
-![部分复制](https://raw.githubusercontent.com/telzhou618/images/main/img01/image-20210916171248307.png)
 
 ###  主从模式的缺点
 
