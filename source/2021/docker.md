@@ -316,3 +316,93 @@ docker-compose -f docker-compose.yml up --fore-recreate -d
 ```bash
 docker-compose -f docker-compose.yml down
 ```
+
+## prometheus + grafana 搭建监控
+
+### 安装 redis-exporter
+```sh
+docker run -d \
+	--name redis_exporter \
+	-p 9121:9121 \
+	-v /etc/localtime:/etc/localtime:ro \
+	oliver006/redis_exporter \
+	--redis.addr redis://192.168.202.101:6379 \ # redis 地址
+```
+
+### 安装 prometheus
+
+```sh
+cd /opt
+mkdir prometheus
+cd /opt/prometheus
+vi prometheus.yml
+```
+
+prometheus.yml
+
+```yaml
+global:
+  scrape_interval: 5s
+scrape_configs:
+  - job_name: prometheus
+    static_configs:
+      - targets: ['localhost:9090']
+        labels:
+          instance: prometheus
+ 
+  - job_name: redis
+    static_configs:
+      - targets: ['192.168.202.101:9121'] # redis_exporter 地址
+        labels:
+          instance: redis
+```
+
+docker 启动 prometheus
+
+```sh
+docker run  -d \
+  -p 9090:9090 \
+  --name=prometheus \
+  -v /etc/localtime:/etc/localtime:ro \
+  -v /opt/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml  \
+  prom/prometheus
+```
+
+### 安装grafana
+
+```sh
+cd /opt
+mkdir grafana-storage
+chmod 777 grafana-storage
+```
+
+```sh
+# grafana
+docker run -d \
+  -p 3000:3000 \
+  --name=grafana \
+  -v /opt/grafana-storage:/var/lib/grafana \
+  -v /etc/localtime:/etc/localtime:ro \
+  grafana/grafana
+```
+
+
+
+
+
+```sh
+docker run -d --name node_exporter \
+	-p 9100:9100 \
+	--restart=always \
+	--net="host" \
+	--pid="host" \
+	-v "/proc:/host/proc:ro" \
+	-v "/sys:/host/sys:ro" \
+	-v "/:/rootfs:ro" \
+	prom/node-exporter \
+	--path.procfs=/host/proc \
+	--path.rootfs=/rootfs \
+	--path.sysfs=/host/sys \
+	--collector.filesystem.ignored-mount-points='^/(sys|proc|dev|host|etc)($$|/)'
+```
+

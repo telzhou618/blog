@@ -673,13 +673,15 @@ Cluster 默认会对 key 值使用 crc16 算法进行 hash 得到一个整数值
 
 ### 单线程模型
 
-Redis之所以快是因为：1、基于内存操作，2-单线程没有上下文切换，基于epoll时间分发模型。
-
-所有的连接都放在一个队列，注册到事件分发器上，如果有客户端发送数据，分发器或通知线程处理。
+Redis之所以快是因为：1、基于内存操作，2-单线程没有上下文切换，3.基于epoll事件分发模型。所有的连接都放在一个队列里，注册到事件分发器上，如果有客户端发送数据，分发器或通知线程处理。
 
 ### 简单动态字符串SDS
 
-SDS源码
+Redis 没用使用C自带的字符串，二是自己定义一个，成为sds简单动态字符串。
+
+![IMG](http://redisbook.com/_images/graphviz-72760f6945c3742eca0df91a91cc379168eda82d.png)
+
+- SDS源码
 
 ```c
 struct sdshdr {
@@ -693,22 +695,108 @@ struct sdshdr {
 }
 ```
 
-SDS相比C字符串
-
-![image-20210914203441733](https://raw.githubusercontent.com/telzhou618/images/main/img/image-20210914203441733.png)
-
-- SDS 用单独字段维护字符的长度。
-  - 字段用于记录字符串的长度，获取时间复杂度为O(1), C字符没有单独的字段记录，获取字符串长度时需要遍历字符串计算，时间复杂度为O(n)。
-- SDS 支持动态扩容机制。
-  - C字符做字符串拼接时，可能由于空间不足导致溢出。
-  - SDS字符串会自动扩容，在执行append操作时，首先判断原字符串剩余空间是否足够，如果不够先扩容，扩容的大小是现有字符串实际长度的两倍，即len等于free，这种扩容叫做预分配扩容机制。
-  - 在字符串删除一部分时会执行惰性缩容策略，也就是不会立即回收空间的空间，而是留着将来使用，同时SDS也提供API给用户在必要的是收到回收空间。
-- SDS 兼容部分C字符串函数。
-  - SDS和C字符串一样保留以空字符"\0"结尾结尾的规则，可以支持很多C字符串函数。
+- 比起 C 字符串， SDS 具有以下优点
+  - 常数复杂度获取字符串长度, O(1)。
+  - 杜绝缓冲区溢出，预先扩容，惰性缩容。
+  - 减少修改字符串长度时所需的内存重分配次数。
+  - 二进制安全。
+  - 兼容部分 C 字符串函数。
 
 ### 链表
 
+链表提供了高效的节点重排能力， 以及顺序性的节点访问方式， 并且可以通过增删节点来灵活地调整链表的长度。每个链表节点使用一个 `adlist.h/listNode` 结构来表示 ，多个 `listNode` 可以通过 `prev` 和 `next` 指针组成双端链表。
+
+![IMG](https://raw.githubusercontent.com/telzhou618/images/main/img01/graphviz-167adfc2e52e078d4c0e3c8a9eddec54551602fb.png)
+
+- 链表节点 listNode 
+
+```c
+typedef struct listNode {
+    // 前置节点
+    struct listNode *prev;
+    // 后置节点
+    struct listNode *next;
+    // 节点的值
+    void *value;
+} listNode;
+```
+
+- 链表源码
+
+```c
+typedef struct list {
+    // 表头节点
+    listNode *head;
+    // 表尾节点
+    listNode *tail;
+    // 链表所包含的节点数量
+    unsigned long len;
+    // 节点值复制函数
+    void *(*dup)(void *ptr);
+    // 节点值释放函数
+    void (*free)(void *ptr);
+    // 节点值对比函数
+    int (*match)(void *ptr, void *key);
+
+} list;
+```
+
+- 用途：链表被广泛用于实现 Redis 的各种功能， 比如列表键， 发布与订阅， 慢查询， 监视器， 等等。
+
 ### 跳跃表
+
+Redis 的有序集合是用跳跃表实现的，跳跃表（skiplist）是一种有序数据结构， 它通过在每个节点中维持多个指向其他节点的指针， 从而达到快速访问节点的目的，跳跃表由 `redis.h/zskiplistNode` 和 `redis.h/zskiplist` 两个结构定义。
+
+![IMG](http://redisbook.com/_images/graphviz-8fc5de396a5b52c3d0b1991a1e09558ad055dd86.png)
+
+
+
+- 跳跃表节点 zskiplistNode
+
+```c
+typedef struct zskiplistNode {
+    // 后退指针
+    struct zskiplistNode *backward;
+    // 分值
+    double score;
+    // 成员对象
+    robj *obj;
+    // 层
+    struct zskiplistLevel {
+        // 前进指针
+        struct zskiplistNode *forward;
+        // 跨度
+        unsigned int span;
+    } level[];
+} zskiplistNode;
+```
+
+- 跳跃表 zskiplist
+
+```c
+typedef struct zskiplist {
+    // 表头节点和表尾节点
+    struct zskiplistNode *header, *tail;
+    // 表中节点的数量
+    unsigned long length;
+    // 表中层数最大的节点的层数
+    int level;
+} zskiplist;
+```
+
+* 图 5-1 展示了一个跳跃表示例， 位于图片最左边的是 `zskiplist` 结构， 该结构包含以下属性：
+  * `header` ：指向跳跃表的表头节点。
+  * `tail` ：指向跳跃表的表尾节点。
+  * `level` ：记录目前跳跃表内，层数最大的那个节点的层数（表头节点的层数不计算在内）。
+  * `length` ：记录跳跃表的长度，也即是，跳跃表目前包含节点的数量（表头节点不计算在内）。
+
+- 位于 `zskiplist` 结构右方的是四个 `zskiplistNode` 结构， 该结构包含以下属性：
+  - 层（level）：节点中用 `L1` 、 `L2` 、 `L3` 等字样标记节点的各个层， `L1` 代表第一层， `L2` 代表第二层，以此类推。每个层都带有两个属性：前进指针和跨度。前进指针用于访问位于表尾方向的其他节点，而跨度则记录了前进指针所指向节点和当前节点的距离。在上面的图片中，连线上带有数字的箭头就代表前进指针，而那个数字就是跨度。当程序从表头向表尾进行遍历时，访问会沿着层的前进指针进行。
+  - 后退（backward）指针：节点中用 `BW` 字样标记节点的后退指针，它指向位于当前节点的前一个节点。后退指针在程序从表尾向表头遍历时使用。
+  - 分值（score）：各个节点中的 `1.0` 、 `2.0` 和 `3.0` 是节点所保存的分值。在跳跃表中，节点按各自所保存的分值从小到大排列。
+  - 成员对象（obj）：各个节点中的 `o1` 、 `o2` 和 `o3` 是节点所保存的成员对象。
+
+- 用途：Redis 的有序集合是用跳跃表实现的。
 
 ## Redis 常见问题及解决
 
@@ -740,7 +828,7 @@ SDS相比C字符串
 
 描述：在并发情况同时操作数据库和缓存可能导致缓存与数据库不一致。
 
-解决方案：1.大部分场景是容忍短时间内缓存与数据库不一致的，只有设置过期时间即可，不能容忍不一致的可以加锁实现，但会牺牲一定的性能。
+解决方案：1.大部分场景是容忍短时间内缓存与数据库不一致的，只有设置过期时间即可，不能容忍不一致的可以加读写锁实现，但会牺牲一定的性能。
 
 ## Redis 参考文档
 
