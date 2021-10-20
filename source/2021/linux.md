@@ -254,8 +254,8 @@ ln source_file target_file
 
 mac 软件包管理工具。
 
-- brew uninstall  [包名] 安装包。
-- brew install [包名] 卸载包。
+- brew install  [包名] 安装包。
+- brew uninstall [包名] 卸载包。
 - brew search [包名] 查询包。
 - brew list   列出已安装的软件。
 - brew update 更新brew。 -
