@@ -269,3 +269,52 @@ mac 软件包管理工具。
 - brew info [包名] 显示软件信息。
 - brew deps [包名] 显示包依赖。
 
+## top
+
+监控CPU、内存、负载、线程等运营情况。
+
+实例：
+
+- 按CPU占用排序。
+
+```shell
+top #然后按sheft + p
+```
+
+- 按内存占用排序。
+
+```shell
+top #然后按 sheft + m
+```
+
+- 每个2秒执行一次top。
+
+```shell
+top -d 2
+```
+
+- 查看指定进程下的所有线程。
+
+```shell
+top -H -p [pid] # 方式1，直接一步完成。
+top -p [pid]    # 方式2，执行完需要按大写H。
+```
+
+## htop
+
+以一种更友好的方式监控机器的运行状况。
+
+安装：
+
+```shell
+yum install htop -y  # centos
+
+brew install htop  # mac
+```
+
+实例：
+
+- 直接执行htop可以监控CPU、内存、线程情况，并且以高亮的新式展示。
+
+![image-20211021104013148](https://raw.githubusercontent.com/telzhou618/images/main/img01/image-20211021104013148.png)
+
